@@ -24,7 +24,6 @@ using AssettoServer.Shared.Network.Packets.Outgoing.Handshake;
 using AssettoServer.Shared.Network.Packets.Shared;
 using AssettoServer.Shared.Weather;
 using AssettoServer.Utils;
-using NanoSockets;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -55,11 +54,12 @@ public class ACTcpClient : IClient
     [MemberNotNullWhen(true, nameof(Name), nameof(Team), nameof(NationCode))]
     public bool HasStartedHandshake { get; private set; }
     public bool HasPassedChecksum { get; private set; }
+    public byte[]? CarChecksum { get; private set; }
     public int SecurityLevel { get; set; }
     public ulong? HardwareIdentifier { get; set; }
     public InputMethod InputMethod { get; set; }
 
-    internal Address? UdpEndpoint { get; private set; }
+    internal SocketAddress? UdpEndpoint { get; private set; }
     internal bool SupportsCSPCustomUpdate { get; private set; }
     internal string ApiKey { get; }
 
@@ -79,8 +79,8 @@ public class ACTcpClient : IClient
     private readonly ChecksumManager _checksumManager;
     private readonly CSPFeatureManager _cspFeatureManager;
     private readonly CSPServerExtraOptions _cspServerExtraOptions;
-    private readonly CSPClientMessageTypeManager _cspClientMessageTypeManager;
     private readonly OpenSlotFilterChain _openSlotFilter;
+    private readonly CSPClientMessageHandler _clientMessageHandler;
 
     /// <summary>
     /// Fires when a client passed the checksum checks. This does not mean that the player has finished loading, use ClientFirstUpdateSent for that.
@@ -157,8 +157,8 @@ public class ACTcpClient : IClient
         ChecksumManager checksumManager,
         CSPFeatureManager cspFeatureManager,
         CSPServerExtraOptions cspServerExtraOptions,
-        CSPClientMessageTypeManager cspClientMessageTypeManager,
-        OpenSlotFilterChain openSlotFilter)
+        OpenSlotFilterChain openSlotFilter, 
+        CSPClientMessageHandler clientMessageHandler)
     {
         UdpServer = udpServer;
         Logger = new LoggerConfiguration()
@@ -176,8 +176,8 @@ public class ACTcpClient : IClient
         _checksumManager = checksumManager;
         _cspFeatureManager = cspFeatureManager;
         _cspServerExtraOptions = cspServerExtraOptions;
-        _cspClientMessageTypeManager = cspClientMessageTypeManager;
         _openSlotFilter = openSlotFilter;
+        _clientMessageHandler = clientMessageHandler;
 
         tcpClient.ReceiveTimeout = (int)TimeSpan.FromMinutes(5).TotalMilliseconds;
         tcpClient.SendTimeout = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
@@ -226,7 +226,7 @@ public class ACTcpClient : IClient
             PacketWriter writer = new PacketWriter(buffer);
             int bytesWritten = writer.WritePacket(in packet);
 
-            UdpServer.Send(UdpEndpoint.Value, buffer, 0, bytesWritten);
+            UdpServer.Send(UdpEndpoint, buffer, 0, bytesWritten);
         }
         catch (Exception ex)
         {
@@ -383,7 +383,7 @@ public class ACTcpClient : IClient
                             SessionTime = _sessionManager.CurrentSession.SessionTimeMilliseconds,
                             ChecksumCount = (byte)_checksumManager.TrackChecksums.Count,
                             ChecksumPaths = _checksumManager.TrackChecksums.Keys,
-                            CurrentTime = _sessionManager.ServerTimeMilliseconds,
+                            CurrentTime = 0, // Ignored by AC
                             LegalTyres = cfg.LegalTyres,
                             RandomSeed = 123,
                             SessionCount = (byte)_configuration.Sessions.Count,
@@ -454,7 +454,7 @@ public class ACTcpClient : IClient
                             if (extendedId == (byte)CSPMessageTypeTcp.SpectateCar)
                                 OnSpectateCar(reader);
                             else if (extendedId == (byte)CSPMessageTypeTcp.ClientMessage)
-                                OnCSPClientMessage(reader);
+                                _clientMessageHandler.OnCSPClientMessageTcp(this, reader);
                             break;
                         default:
                             break;
@@ -504,51 +504,6 @@ public class ACTcpClient : IClient
         EntryCar.TargetCar = spectatePacket.SessionId != SessionId ? _entryCarManager.EntryCars[spectatePacket.SessionId] : null;
     }
 
-    private void OnCSPClientMessage(PacketReader reader)
-    {
-        CSPClientMessageType packetType = (CSPClientMessageType)reader.Read<ushort>();
-        if (packetType == CSPClientMessageType.LuaMessage)
-        {
-            uint luaPacketType = reader.Read<uint>();
-
-            if (_cspClientMessageTypeManager.MessageTypes.TryGetValue(luaPacketType, out var handler))
-            {
-                handler(this, reader);
-            }
-            else
-            {
-                CSPClientMessage clientMessage = reader.ReadPacket<CSPClientMessage>();
-                clientMessage.Type = packetType;
-                clientMessage.LuaType = luaPacketType;
-                clientMessage.SessionId = SessionId;
-
-                Logger.Debug("Unknown CSP lua client message with type 0x{LuaType:X} received from {ClientName} ({SessionId}), data {Data}", clientMessage.LuaType, Name, SessionId, Convert.ToHexString(clientMessage.Data));
-                _entryCarManager.BroadcastPacket(clientMessage);
-            }
-        }
-        else if (packetType == CSPClientMessageType.HandshakeOut)
-        {
-            var packet = reader.ReadPacket<CSPHandshakeOut>();
-            InputMethod = packet.InputMethod;
-
-            Logger.Information("CSP handshake received from {ClientName} ({SessionId}): Version={Version} WeatherFX={WeatherFxActive} InputMethod={InputMethod} RainFX={RainFxActive} HWID={HardwareId}", 
-                Name, SessionId, packet.Version, packet.IsWeatherFxActive, packet.InputMethod, packet.IsRainFxActive, packet.UniqueKey);
-        }
-        else if (_cspClientMessageTypeManager.RawMessageTypes.TryGetValue(packetType, out var handler))
-        {
-            handler(this, reader);
-        }
-        else
-        {
-            CSPClientMessage clientMessage = reader.ReadPacket<CSPClientMessage>();
-            clientMessage.Type = packetType;
-            clientMessage.SessionId = SessionId;
-
-            Log.Verbose("Client message received from {ClientName} ({SessionId}), type {Type}, data {Data}", Name, SessionId, packetType, clientMessage.Data);
-            _entryCarManager.BroadcastPacket(clientMessage);
-        }
-    }
-
     private void OnChecksum(PacketReader reader)
     {
         bool passedChecksum = false;
@@ -556,8 +511,10 @@ public class ACTcpClient : IClient
         if (reader.Buffer.Length == fullChecksum.Length + 1)
         {
             reader.ReadBytes(fullChecksum);
-            passedChecksum = !_checksumManager.CarChecksums.TryGetValue(EntryCar.Model, out List<byte[]>? modelChecksums) || modelChecksums.Count == 0
-                || modelChecksums.Any(c => fullChecksum.AsSpan().Slice(fullChecksum.Length - 16).SequenceEqual(c));
+            CarChecksum = fullChecksum.AsSpan().Slice(fullChecksum.Length - 16).ToArray();
+            passedChecksum = !_checksumManager.CarChecksums.TryGetValue(EntryCar.Model, out var modelChecksums)
+                             || modelChecksums.Count == 0 
+                             || modelChecksums.Any(c => CarChecksum.AsSpan().SequenceEqual(c));
 
             KeyValuePair<string, byte[]>[] allChecksums = _checksumManager.TrackChecksums.ToArray();
             for (int i = 0; i < allChecksums.Length; i++)
@@ -903,7 +860,7 @@ public class ACTcpClient : IClient
         };
     }
 
-    internal bool TryAssociateUdp(Address endpoint)
+    internal bool TryAssociateUdp(SocketAddress endpoint)
     {
         if (UdpEndpoint != null)
             return false;

@@ -3,6 +3,7 @@ using Qmmands;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using AssettoServer.Commands.Attributes;
 using AssettoServer.Server.Configuration;
 using AssettoServer.Server.Weather;
 using JetBrains.Annotations;
@@ -23,7 +24,7 @@ public class GeneralModule : ACModuleBase
 
     [Command("ping"), RequireConnectedPlayer]
     public void Ping()
-        => Reply($"Pong! {Context.Client!.EntryCar.Ping}ms.");
+        => Reply($"Pong! {Client!.EntryCar.Ping}ms.");
 
     [Command("time")]
     public void Time()
@@ -43,7 +44,7 @@ public class GeneralModule : ACModuleBase
     {
         if (password == _configuration.Server.AdminPassword)
         {
-            Context.Client!.IsAdministrator = true;
+            Client!.IsAdministrator = true;
             Reply("You are now Admin for this server");
         }
         else

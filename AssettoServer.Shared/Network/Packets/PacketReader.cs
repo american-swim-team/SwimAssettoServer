@@ -1,6 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
 using AssettoServer.Shared.Network.Packets.Incoming;
+using AssettoServer.Shared.Utils;
 
 namespace AssettoServer.Shared.Network.Packets;
 
@@ -23,11 +24,14 @@ public struct PacketReader
         ReadPosition = 0;
     }
 
-    public string ReadASCIIString(bool bigLength = false)
+    [Obsolete("This function uses UTF8 internally. Use ReadUTF8String instead")]
+    public string ReadASCIIString(bool bigLength = false) => ReadUTF8String(bigLength);
+
+    public string ReadUTF8String(bool bigLength = false)
     {
         short stringLength = bigLength ? Read<short>() : Read<byte>();
-            
-        var ret = string.Create(stringLength, this, (span, self) => Encoding.ASCII.GetChars(self.Buffer.Slice(self.ReadPosition, span.Length).Span, span));
+        
+        var ret = Encoding.UTF8.GetString(Buffer.Slice(ReadPosition, stringLength).Span);
         ReadPosition += stringLength;
 
         return ret;
@@ -36,25 +40,32 @@ public struct PacketReader
     public string ReadUTF32String(bool bigLength = false)
     {
         short stringLength = bigLength ? Read<short>() : Read<byte>();
-
-        var ret = string.Create(stringLength, this, (span, self) => Encoding.UTF32.GetChars(self.Buffer.Slice(self.ReadPosition, span.Length * 4).Span, span));
+        
+        var ret = Encoding.UTF32.GetString(Buffer.Slice(ReadPosition, stringLength * 4).Span);
         ReadPosition += stringLength * 4;
-
+        
         return ret;
     }
     
     public string ReadStringFixed(Encoding encoding, int length)
     {
         int bytesToRead = Math.Min(length, Buffer.Length - ReadPosition);
-        var ret = encoding.GetString(Buffer.Slice(ReadPosition, bytesToRead).Span);
+        var ret = encoding.GetString(Buffer.Slice(ReadPosition, bytesToRead).Span.TrimEnd(stackalloc byte[] { 0 }));
+        ReadPosition += bytesToRead;
+        return ret;
+    }
+
+    public Span<T> ReadArrayFixed<T>(int length) where T : unmanaged
+    {
+        int bytesToRead = Math.Min(MarshalUtils.SizeOf(typeof(T).IsEnum ? Enum.GetUnderlyingType(typeof(T)) : typeof(T)) * length, Buffer.Length - ReadPosition);
+        var ret = MemoryMarshal.Cast<byte, T>(Buffer.Slice(ReadPosition, bytesToRead).Span);
         ReadPosition += bytesToRead;
         return ret;
     }
 
     public T Read<T>() where T : unmanaged
     {
-        // Marshal.SizeOf(typeof(bool)) returns 4 - we need 1. See https://stackoverflow.com/a/47956291
-        var bytesToRead = typeof(T) == typeof(bool) ? 1 : Marshal.SizeOf(typeof(T).IsEnum ? Enum.GetUnderlyingType(typeof(T)) : typeof(T));
+        var bytesToRead = MarshalUtils.SizeOf(typeof(T).IsEnum ? Enum.GetUnderlyingType(typeof(T)) : typeof(T));
         var slice = Buffer.Slice(ReadPosition, Math.Min(bytesToRead, Buffer.Length - ReadPosition)).Span;
 
         T result;

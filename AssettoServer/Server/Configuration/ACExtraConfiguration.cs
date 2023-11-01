@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 using System.Reflection;
 using AssettoServer.Server.Plugin;
 using Autofac;
@@ -48,6 +49,8 @@ public partial class ACExtraConfiguration : ObservableObject
     public bool EnableRealTime { get; set; } = false;
     [YamlMember(Description = "Enable new CSP weather handling. Allows rain and smooth weather transitions. Requires CSP 0.1.76+")]
     public bool EnableWeatherFx { get; init; } = false;
+    [YamlMember(Description = "Lock server date to real date. This stops server time \"running away\" when using a high time multiplier, so that in-game sunrise/sunset times are based on the current date")]
+    public bool LockServerDate { get; set; } = true;
     [YamlMember(Description = "Reduce track grip when the track is wet. This is much worse than proper CSP rain physics but allows you to run clients with public/Patreon CSP at the same time")]
     public double RainTrackGripReductionPercent { get; set; } = 0;
     [YamlMember(Description = "Enable AI traffic")]
@@ -60,6 +63,10 @@ public partial class ACExtraConfiguration : ObservableObject
     public IgnoreConfigurationErrors IgnoreConfigurationErrors { get; init; } = new();
     [YamlMember(Description = "Enable CSP client messages feature. Requires CSP 0.1.77+")]
     public bool EnableClientMessages { get; init; } = false;
+    [YamlMember(Description = "Enable CSP UDP client messages feature. Required for VR head/hand syncing. Requires CSP 0.1.80+")]
+    public bool EnableUdpClientMessages { get; init; } = false;
+    [YamlMember(Description = "Log unknown CSP Lua client messages / online events")]
+    public bool DebugClientMessages { get; set; } = false;
     [YamlMember(Description = "Enable CSP custom position updates. This is an improved version of batched position updates, reducing network traffic even further. CSP 0.1.77+ required")]
     public bool EnableCustomUpdate { get; set; } = false;
     [YamlMember(Description = "Maximum time a player can spend on the loading screen before being disconnected")]
@@ -95,6 +102,8 @@ public partial class ACExtraConfiguration : ObservableObject
     public string AdminUserGroup { get; init; } = "default_admins";
     [YamlMember(Description = "List of allowed origins for Cross-Origin Resource Sharing. Use this if you want to query this server from a website")]
     public List<string>? CorsAllowedOrigins { get; init; }
+    [YamlMember(Description = "Allow a user group to execute specific admin commands")]
+    public List<UserGroupCommandPermissions>? UserGroupCommandPermissions { get; init; }
     
     public AiParams AiParams { get; init; } = new AiParams();
 
@@ -296,6 +305,8 @@ public partial class AiParams : ObservableObject
     public bool Debug { get; set; } = false;
     [YamlMember(Description = "Update interval for AI spawn point finder")]
     public int AiBehaviorUpdateIntervalHz { get; set; } = 2;
+    [YamlMember(Description = "AI cars inside these areas will ignore all player obstacles")]
+    public List<Sphere>? IgnorePlayerObstacleSpheres { get; set; }
     [YamlMember(Description = "Override some settings for newly spawned cars based on the number of lanes")]
     public Dictionary<int, LaneCountSpecificOverrides> LaneCountSpecificOverrides { get; set; } = new();
     [YamlMember(Description = "Override some settings for specific car models/skins")]
@@ -342,6 +353,37 @@ public class CarSpecificOverrides
     public float? CorneringBrakeForceFactor { get; init; }
     [YamlMember(Description = "Tyre diameter of AI cars in meters, shouldn't have to be changed unless cars are creating lots of smoke.")]
     public float? TyreDiameterMeters { get; set; }
+    [YamlMember(Description = "Maximum number of AI states for a car slot of this car model")]
+    public int? MaxOverbooking { get; set; }
+    [YamlMember(Description = "Minimum time in which a newly spawned AI car cannot despawn")]
+    public int? MinSpawnProtectionTimeSeconds { get; set; }
+    [YamlMember(Description = "Maximum time in which a newly spawned AI car cannot despawn")]
+    public int? MaxSpawnProtectionTimeSeconds { get; set; }
+    [YamlMember(Description = "Minimum number of lanes needed to spawn a car of this car model")]
+    public int? MinLaneCount { get; set; }
+    [YamlMember(Description = "Maximum number of lanes needed to spawn a car of this car model")]
+    public int? MaxLaneCount { get; set; }
+    [YamlMember(Description = "Minimum time an AI car will stop/slow down after a collision")]
+    public int? MinCollisionStopTimeSeconds { get; set; }
+    [YamlMember(Description = "Maximum time an AI car will stop/slow down after a collision")]
+    public int? MaxCollisionStopTimeSeconds { get; set; }
+    [YamlMember(Description = "Length of this vehicle in front of car origin")]
+    public float? VehicleLengthPreMeters { get; set; }
+    [YamlMember(Description = "Length of this vehicle behind car origin")]
+    public float? VehicleLengthPostMeters { get; set; }
+    [YamlMember(Description = "Minimum distance between AI cars")]
+    public int? MinAiSafetyDistanceMeters { get; set; }
+    [YamlMember(Description = "Maximum distance between AI cars")]
+    public int? MaxAiSafetyDistanceMeters { get; set; }
+    [YamlMember(Description = "List of allowed lanes for this car model. Possible values Left, Middle, Right")]
+    public List<LaneSpawnBehavior>? AllowedLanes { get; set; }
+
+    [YamlIgnore] public int? MinSpawnProtectionTimeMilliseconds => MinSpawnProtectionTimeSeconds * 1000;
+    [YamlIgnore] public int? MaxSpawnProtectionTimeMilliseconds => MaxSpawnProtectionTimeSeconds * 1000;
+    [YamlIgnore] public int? MinCollisionStopTimeMilliseconds => MinCollisionStopTimeSeconds * 1000;
+    [YamlIgnore] public int? MaxCollisionStopTimeMilliseconds => MaxCollisionStopTimeSeconds * 1000;
+    [YamlIgnore] public int? MinAiSafetyDistanceMetersSquared => MinAiSafetyDistanceMeters * MinAiSafetyDistanceMeters;
+    [YamlIgnore] public int? MaxAiSafetyDistanceMetersSquared => MaxAiSafetyDistanceMeters * MaxAiSafetyDistanceMeters;
 }
 
 [UsedImplicitly(ImplicitUseKindFlags.Assign, ImplicitUseTargetFlags.WithMembers)]
@@ -359,4 +401,25 @@ public enum AfkKickBehavior
 {
     PlayerInput,
     MinimumSpeed
+}
+
+public enum LaneSpawnBehavior
+{
+    Left,
+    Middle,
+    Right
+}
+
+[UsedImplicitly(ImplicitUseKindFlags.Assign, ImplicitUseTargetFlags.WithMembers)]
+public class Sphere
+{
+    public Vector3 Center { get; set; }
+    public float RadiusMeters { get; set; }
+}
+
+[UsedImplicitly(ImplicitUseKindFlags.Assign, ImplicitUseTargetFlags.WithMembers)]
+public class UserGroupCommandPermissions
+{
+    public required string UserGroup { get; set; }
+    public required List<string> Commands { get; set; }
 }
