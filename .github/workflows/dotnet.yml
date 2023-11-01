@@ -3,6 +3,7 @@ on:
   push:
     tags:        
       - 'v*'
+      - 'b*'
 
 jobs:
   build:
@@ -17,6 +18,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 9.x
+    - name: Execute powershell script
+      run: |
+        chmod +x ./projects.ps1
+        pwsh -File ./projects.ps1
     - name: Publish (Linux x64)
       run: dotnet publish --runtime linux-x64 -c Release
     - name: Publish (Linux arm64)

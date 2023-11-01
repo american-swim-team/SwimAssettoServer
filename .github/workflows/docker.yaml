@@ -22,7 +22,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            compujuckel/assettoserver
+            rom3dius/swim-assetto-server
           tags: |
             type=semver,pattern={{version}}
 
