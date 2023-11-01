@@ -18,6 +18,10 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 8.x
+    - name: Run projects.ps1
+      run: |
+        chmod +x ./projects.ps1
+        pwsh -File projects.ps1
     - name: Publish (Linux x64)
       run: dotnet publish --runtime linux-x64 -c Release
     - name: Publish (Linux arm64)
