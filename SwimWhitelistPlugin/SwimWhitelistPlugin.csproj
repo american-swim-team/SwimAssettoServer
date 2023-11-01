@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -10,7 +10,7 @@
     <PublishDir Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">..\out-linux-arm64\plugins\$(MSBuildProjectName)\</PublishDir>
     <PublishDir Condition="'$(RuntimeIdentifier)' == 'win-x64'">..\out-win-x64\plugins\$(MSBuildProjectName)\</PublishDir>
     <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    <ProjectGuid>{5F687B70-D74D-47D2-96F0-1AAB5D7F6F34}</ProjectGuid>
+    <ProjectGuid>{E52F52AE-4501-452E-9797-A104B2AF0887}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
@@ -21,6 +21,5 @@
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
-    <PackageReference Include="CSharpDiscordWebhookAsync" Version="1.0.2" />
   </ItemGroup>
 </Project>

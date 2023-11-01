@@ -1,21 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFramework>net7.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <SelfContained>false</SelfContained>
-        <DebugType>embedded</DebugType>
-        <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-      <FrameworkReference Include="Microsoft.AspNetCore.App" Version="2.2.8" />
-      <PackageReference Include="Serilog" Version="3.0.1" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Network\" />
-    </ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>false</SelfContained>
+    <DebugType>embedded</DebugType>
+    <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+    <ProjectGuid>{A981B5DE-44F2-47A9-82F4-C35FB9720B57}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" Version="2.2.8" />
+    <PackageReference Include="Serilog" Version="3.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Network\" />
+  </ItemGroup>
 </Project>

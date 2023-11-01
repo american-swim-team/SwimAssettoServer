@@ -1,16 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>net7.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <SelfContained>false</SelfContained>
-        <DebugType>embedded</DebugType>
-        <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <PackageReference Include="protobuf-net.Grpc" Version="1.1.1" />
-    </ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>false</SelfContained>
+    <DebugType>embedded</DebugType>
+    <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+    <ProjectGuid>{1FAE429F-85FB-46DB-A88B-484254D76CB5}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="protobuf-net.Grpc" Version="1.1.1" />
+  </ItemGroup>
 </Project>
