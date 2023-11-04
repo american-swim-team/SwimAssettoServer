@@ -8,9 +8,9 @@ namespace SwimWhitelistPlugin;
 public class SwimWhitelistConfiguration : IValidateConfiguration<SwimWhitelistConfigurationValidator>
 {
     public Uri? EndpointUrl { get; init; }
-    public int ReservedSlots { get; init; }
-    public List<long> ReservedSlotsRoles { get; init; } = new();
-    public List<ReservedCar> ReservedCars { get; init; } = new();
+    public int? ReservedSlots { get; init; }
+    public List<long>? ReservedSlotsRoles { get; init; } = new();
+    public List<ReservedCar>? ReservedCars { get; init; } = new();
 }
 
 [UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]

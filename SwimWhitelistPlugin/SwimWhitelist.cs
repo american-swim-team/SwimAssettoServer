@@ -51,7 +51,7 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
                 rolesToCheck = _config.ReservedSlotsRoles;
             }
         }
-        if (_config.ReservedCars.Any(x => x.Model == request.RequestedCar)) // Check if the slot is reserved
+        if (_config.ReservedCars != null &&_config.ReservedCars.Any(x => x.Model == request.RequestedCar)) // Check if the slot is reserved
         {
             int totalSlots = 0;
             int inUse = 0;
@@ -90,17 +90,19 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
         var responseContent = response.Content.ReadAsStringAsync().Result;
         var responseJson = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent);
 
+        Log.Information("Response from {EndpointUrl}: {Response}", _config.EndpointUrl, responseContent);
+
         if (responseJson == null)
         {
             Log.Error("Failed to deserialize JSON response from {EndpointUrl}", _config.EndpointUrl);
             return Task.FromResult<AuthFailedResponse?>(new AuthFailedResponse("Failed to deserialize JSON response from the API endpoint."));
         }
 
-        // check if responseJSON status is UNAUTHORIZED
-        if (responseJson["status"] == "UNAUTHORIZED")
+        // check if responseJSON status is UNAUTHORIZED or no steamid was found (417 server response code)
+        if (responseJson["status"] == "UNAUTHORIZED" || response.StatusCode == System.Net.HttpStatusCode.ExpectationFailed)
         {
             Log.Information("User {SteamId} is not authorized", request.Guid);
-            return Task.FromResult<AuthFailedResponse?>(new AuthFailedResponse("This slot is whitelisted, make sure you have the appropriate roles on discord."));
+            return Task.FromResult<AuthFailedResponse?>(new AuthFailedResponse("This slot is whitelisted, make sure you have the appropriate roles on discord. If you have the appropriate roles, use the /link command in discord to link your steamid!"));
         }
 
         Log.Information("User {SteamId} is authorized / slot doesn't require authorization", request.Guid);
