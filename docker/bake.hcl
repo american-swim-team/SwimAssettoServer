@@ -5,6 +5,6 @@ target "default" {
   context = "./"
   dockerfile = "./docker/Dockerfile"
   platforms = [
-    "linux/arm64",
+    "linux/amd64",
   ]
 }
