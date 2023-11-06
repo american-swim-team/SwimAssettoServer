@@ -34,4 +34,4 @@ jobs:
 
       - name: Build the Image
         run: |
-          BUILDKIT_INLINE_CACHE=0 docker buildx bake -f docker/bake.hcl -f ${{ steps.meta.outputs.bake-file }} --push
+          docker buildx bake -f docker/bake.hcl -f ${{ steps.meta.outputs.bake-file }} --push
