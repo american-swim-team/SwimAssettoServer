@@ -29,6 +29,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwimWhitelistPlugin", "Swim
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoIPPlugin", "GeoIPPlugin\GeoIPPlugin.csproj", "{EDA89C7D-47B6-4C02-A0D2-A8F0A46C9EBA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwimCutupPlugin", "SwimCutupPlugin\SwimCutupPlugin.csproj", "{34721665-FB42-445A-BF3E-1B86F803699E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeDilationPlugin", "TimeDilationPlugin\TimeDilationPlugin.csproj", "{C7804769-FD04-41CF-B908-FC271D117157}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +91,14 @@ Global
 		{EDA89C7D-47B6-4C02-A0D2-A8F0A46C9EBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EDA89C7D-47B6-4C02-A0D2-A8F0A46C9EBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EDA89C7D-47B6-4C02-A0D2-A8F0A46C9EBA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{34721665-FB42-445A-BF3E-1B86F803699E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34721665-FB42-445A-BF3E-1B86F803699E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34721665-FB42-445A-BF3E-1B86F803699E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34721665-FB42-445A-BF3E-1B86F803699E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7804769-FD04-41CF-B908-FC271D117157}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7804769-FD04-41CF-B908-FC271D117157}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7804769-FD04-41CF-B908-FC271D117157}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7804769-FD04-41CF-B908-FC271D117157}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

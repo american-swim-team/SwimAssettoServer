@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using AssettoServer.Server.Configuration;
 using AssettoServer.Server.Plugin;
 using AssettoServer.Server.Weather;
