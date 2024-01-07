@@ -1,4 +1,3 @@
-using AssettoServer.Server.OpenSlotFilters;
 using AssettoServer.Server.Plugin;
 using Autofac;
 
