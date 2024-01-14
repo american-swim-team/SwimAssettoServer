@@ -52,12 +52,18 @@ public class SwimCutupPlugin
                 client.SendPacket(new SwimCutupMsg { MsgType = 1, Payload = highscore["data"] });
                 break;
             case 2:
+                // update highscore
                 var new_highscore_request = new StringContent(JsonSerializer.Serialize(new { steamid = client.Guid, track = _trackName, car = client.EntryCar.Model, score = payload }), Encoding.UTF8, "application/json");
                 var new_highscore_response = _http.PostAsync(_config.Server + "/insert_cutup_score", new_highscore_request).Result.Content.ReadAsStringAsync().Result;
                 var status =  JsonSerializer.Deserialize<Dictionary<string, string>>(new_highscore_response);
                 if (status["status"] == "ERROR") {
                     Log.Information("SwimCutupPlugin: Error updating highscore: {status}", status["message"]);
                 }
+                // fetch new highscore
+                var highscore_update_request = new StringContent(JsonSerializer.Serialize(new { steamid = client.Guid, track = _trackName, car = client.EntryCar.Model }), Encoding.UTF8, "application/json");
+                var highscore_update_response = _http.PostAsync(_config.Server + "/fetch_cutup_score", highscore_update_request).Result.Content.ReadAsStringAsync().Result;
+                var highscore_update =  JsonSerializer.Deserialize<Dictionary<string, long>>(highscore_update_response);
+                client.SendPacket(new SwimCutupMsg { MsgType = 1, Payload = highscore_update["data"] });
                 break;
             default:
                 Log.Information("SwimCutupPlugin: Unknown");
