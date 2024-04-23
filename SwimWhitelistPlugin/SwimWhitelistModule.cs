@@ -1,5 +1,5 @@
-﻿using AssettoServer.Server.OpenSlotFilters;
-using AssettoServer.Server.Plugin;
+﻿using AssettoServer.Server.Plugin;
+using AssettoServer.Server.OpenSlotFilters;
 using Autofac;
 
 namespace SwimWhitelistPlugin;

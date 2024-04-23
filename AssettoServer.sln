@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30420.98
@@ -22,6 +22,14 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssettoServer.Tests", "AssettoServer.Tests\AssettoServer.Tests.csproj", "{DA97DFBB-EA56-468C-BEDE-7CBEB360DD0E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwimWhitelistPlugin", "SwimWhitelistPlugin\SwimWhitelistPlugin.csproj", "{E52F52AE-4501-452E-9797-A104B2AF0887}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoIPPlugin", "GeoIPPlugin\GeoIPPlugin.csproj", "{EDA89C7D-47B6-4C02-A0D2-A8F0A46C9EBA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwimCutupPlugin", "SwimCutupPlugin\SwimCutupPlugin.csproj", "{34721665-FB42-445A-BF3E-1B86F803699E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeDilationPlugin", "TimeDilationPlugin\TimeDilationPlugin.csproj", "{C7804769-FD04-41CF-B908-FC271D117157}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SwimHubPlugin", "SwimHubPlugin\SwimHubPlugin.csproj", "{E52F52AE-4501-452E-9797-A104B2AF0887}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

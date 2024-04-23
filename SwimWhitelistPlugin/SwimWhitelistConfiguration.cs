@@ -9,7 +9,7 @@ public class SwimWhitelistConfiguration : IValidateConfiguration<SwimWhitelistCo
 {
     public Uri? EndpointUrl { get; init; }
     public int? ReservedSlots { get; init; }
-    public List<long>? ReservedSlotsRoles { get; init; } = new();
+    public List<string>? ReservedSlotsRoles { get; init; } = new();
     public List<ReservedCar>? ReservedCars { get; init; } = new();
 }
 
@@ -18,5 +18,5 @@ public struct ReservedCar
 {
     public string Model { get; set; }
     public int Amount { get; set; }
-    public List<long> Roles { get; set; }
+    public List<string> Roles { get; set; }
 }

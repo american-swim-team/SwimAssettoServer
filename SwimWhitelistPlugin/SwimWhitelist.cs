@@ -1,10 +1,11 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text;
 using AssettoServer.Commands;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.OpenSlotFilters;
+using AssettoServer.Server.UserGroup;
 using AssettoServer.Shared.Network.Packets.Incoming;
 using AssettoServer.Shared.Network.Packets.Outgoing.Handshake;
 using Serilog;
@@ -17,17 +18,19 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
 {
     private readonly EntryCarManager _entryCarManager;
     private readonly SwimWhitelistConfiguration _config;
+    private readonly UserGroupManager _userGroupManager;
     private readonly HttpClient _http = new HttpClient();
 
-    public SwimWhitelistFilter(SwimWhitelistConfiguration configuration, EntryCarManager entryCarManager)
+    public SwimWhitelistFilter(SwimWhitelistConfiguration configuration, EntryCarManager entryCarManager, UserGroupManager UserGroupManager)
     {
         _config = configuration;
         _entryCarManager = entryCarManager;
+        _userGroupManager = UserGroupManager;
     }
 
     public override Task<AuthFailedResponse?> ShouldAcceptConnectionAsync(ACTcpClient client, HandshakeRequest request)
     {
-        var rolesToCheck = new List<long>();
+        var rolesToCheck = new List<string>();
         var EntryCars = _entryCarManager.EntryCars;
 
         if ( _config.ReservedSlotsRoles != null) // Check if theres enough slots available
@@ -77,8 +80,7 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
             return base.ShouldAcceptConnectionAsync(client, request);
         }
 
-        // Check roles using the API endpoint
-        var payload = new 
+        foreach (var role in rolesToCheck)
         {
             roles = rolesToCheck,
             steamid = request.Guid
