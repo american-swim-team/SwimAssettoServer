@@ -14,7 +14,6 @@ using AssettoServer.Shared.Network.Packets.Outgoing;
 using AssettoServer.Shared.Network.Packets.Shared;
 using AssettoServer.Shared.Network.Packets.UdpPlugin;
 using AssettoServer.Shared.Services;
-using AssettoServer.Utils;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using ClientEvent = AssettoServer.Shared.Network.Packets.UdpPlugin.ClientEvent;
@@ -64,15 +63,15 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
         {
             throw new ConfigurationException("UDP_PLUGIN_ADDRESS is invalid, needs to be in format 0.0.0.0:10000");
         }
-        var ip = IPAddress.Parse(addressSplit[0]);
+        var ip = addressSplit[0];
 
         if (_configuration.Server.UdpPluginLocalPort == outPort)
         {
             throw new ConfigurationException("UDP_PLUGIN_ADDRESS port needs to be different from UDP_PLUGIN_LOCAL_PORT");
         }
 
-        _outAddress = new IPEndPoint(ip, outPort).Serialize();
-        _inAddress = new IPEndPoint(ip, _configuration.Server.UdpPluginLocalPort).Serialize();
+        _outAddress = new IPEndPoint(IPAddress.Parse(ip), outPort).Serialize();
+        _inAddress = new IPEndPoint(IPAddress.Any, _configuration.Server.UdpPluginLocalPort).Serialize();
 
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
     }
@@ -80,9 +79,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         Log.Information("Starting UDP plugin server on port {Port}", _configuration.Server.UdpPluginLocalPort);
-        
-        _socket.DisableUdpIcmpExceptions();
-        _socket.ReceiveTimeout = 1000;
+
         _socket.Bind(new IPEndPoint(IPAddress.Any, _configuration.Server.UdpPluginLocalPort));
 
         Task realtimeTask = Task.Run(async () =>
@@ -123,7 +120,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
 
         SendPacket(new Version{ ProtocolVersion = RequiredProtocolVersion });
         SendSessionInfo(-1, true);
-        _sessionManager.SessionChanged += (_, args) =>
+        _sessionManager.SessionChanged += (manager, args) =>
         {
             SendSessionInfo((short)args.NextSession.Configuration.Id, true);
         };
@@ -143,7 +140,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
             try
             {
                 var bytesRead = _socket.ReceiveFrom(buffer, SocketFlags.None, address);
-                if (address.IpEquals(_inAddress))
+                if (address.Equals(_inAddress))
                 {
                     OnReceived(buffer, bytesRead);
                 }
@@ -151,11 +148,6 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
                 {
                     Log.Information("Ignoring UDP Plugin packet from address {Address}", address);
                 }
-            }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-            {
-                // This is a workaround because on Linux, the SocketAddress Size will be set to 0 for some reason
-                address.Size = address.Buffer.Length;
             }
             catch (Exception ex)
             {
@@ -166,7 +158,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
 
     private void Send(byte[] buffer, int offset, int size)
     {
-        _socket.SendTo(buffer.AsSpan(offset, size), SocketFlags.None, _outAddress);
+        _socket.SendTo(buffer.AsSpan().Slice(offset, size), SocketFlags.None, _outAddress);
     }
 
     private void SendPacket<TPacket>(in TPacket packet) where TPacket : IOutgoingNetworkPacket

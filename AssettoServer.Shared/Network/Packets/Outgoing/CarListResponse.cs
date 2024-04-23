@@ -6,10 +6,13 @@ public class CarListResponse : IOutgoingNetworkPacket
 {
     public int PageIndex;
     public int EntryCarsCount;
-    public required IEnumerable<IEntryCar<IClient>> EntryCars;
+    public IEnumerable<IEntryCar<IClient>>? EntryCars;
 
     public void ToWriter(ref PacketWriter writer)
     {
+        if (EntryCars == null)
+            throw new ArgumentNullException(nameof(EntryCars));
+            
         writer.Write((byte)ACServerProtocol.CarList);
         writer.Write((byte)PageIndex);
         writer.Write((byte)EntryCarsCount);
@@ -22,7 +25,9 @@ public class CarListResponse : IOutgoingNetworkPacket
             writer.WriteUTF8String(car.Client?.Team);
             writer.WriteUTF8String(car.Client?.NationCode);
             writer.Write(car.IsSpectator);
-            writer.Write(car.Status.DamageZoneLevel);
+
+            for (int i = 0; i < car.Status.DamageZoneLevel.Length; i++)
+                writer.Write(car.Status.DamageZoneLevel[i]);
         }
     }
 }

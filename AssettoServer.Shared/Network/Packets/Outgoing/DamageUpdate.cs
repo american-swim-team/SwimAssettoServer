@@ -1,16 +1,16 @@
-﻿using AssettoServer.Shared.Model;
-
-namespace AssettoServer.Shared.Network.Packets.Outgoing;
+﻿namespace AssettoServer.Shared.Network.Packets.Outgoing;
 
 public class DamageUpdate : IOutgoingNetworkPacket
 {
     public byte SessionId;
-    public DamageZoneLevel DamageZoneLevel;
+    public float[] DamageZoneLevel = null!;
 
     public void ToWriter(ref PacketWriter writer)
     {
-        writer.Write(ACServerProtocol.DamageUpdate);
+        writer.Write((byte)ACServerProtocol.DamageUpdate);
         writer.Write(SessionId);
-        writer.Write(DamageZoneLevel);
+
+        for (int i = 0; i < 5; i++)
+            writer.Write(DamageZoneLevel[i]);
     }
 }

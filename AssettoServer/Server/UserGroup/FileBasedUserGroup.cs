@@ -10,7 +10,7 @@ using Serilog;
 
 namespace AssettoServer.Server.UserGroup;
 
-public class FileBasedUserGroup : IListableUserGroup, IDisposable
+public class FileBasedUserGroup : IListableUserGroup
 {
     public IReadOnlyCollection<ulong> List { get; private set; }
 
@@ -59,7 +59,7 @@ public class FileBasedUserGroup : IListableUserGroup, IDisposable
     public async Task LoadAsync()
     {
         var policy = Policy.Handle<IOException>().WaitAndRetryAsync(3, attempt => TimeSpan.FromMilliseconds(attempt * 100));
-        
+
         await _lock.WaitAsync();
         try
         {
@@ -123,11 +123,5 @@ public class FileBasedUserGroup : IListableUserGroup, IDisposable
         }
 
         return true;
-    }
-
-    public void Dispose()
-    {
-        _lock.Dispose();
-        _watcher.Dispose();
     }
 }

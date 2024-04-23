@@ -3,61 +3,55 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
-using Autofac.Core;
 using IniParser.Exceptions;
 using Microsoft.AspNetCore.Connections;
 using YamlDotNet.Core;
 
 namespace AssettoServer;
 
-internal static class ExceptionHelper
+public static class ExceptionHelper
 {
-    private const string HorizontalSeparator = "══════════════════════════════════════════════════════════════════════════════════════════════════════";
+    public const string HorizontalSeparator = "══════════════════════════════════════════════════════════════════════════════════════════════════════";
 
-    private const string GeneralInformation = """
-                                              AssettoServer has failed to start. Here is what to try next:
-                                              - Read the above error message carefully
-                                              - Read the documentation: https://assettoserver.org/
-                                              - Ask for help in the official AssettoServer Discord: https://discord.gg/uXEXRcSkyz
+    public const string GeneralInformation = """
+AssettoServer has failed to start. Here is what to try next:
+- Read the above error message carefully
+- Read the documentation: https://assettoserver.org/
+- Ask for help in the official AssettoServer Discord: https://discord.gg/uXEXRcSkyz
 
-                                              Please make sure that you downloaded AssettoServer from the official website.
-                                              Security of the files cannot be guaranteed if you downloaded it from a random YouTube video
-                                              or another Discord server.
-                                              """;
+Please make sure that you downloaded AssettoServer from the official website.
+Security of the files cannot be guaranteed if you downloaded it from a random YouTube video
+or another Discord server.
+""";
 
     public static void PrintExceptionHelp(Exception ex, bool isContentManager)
     {
         string? helpLink = null;
 
-        while (ex is DependencyResolutionException && ex.InnerException != null)
+        var inner = ex;
+        while (inner.InnerException != null)
         {
-            ex = ex.InnerException;
+            inner = inner.InnerException;
         }
         
         Console.WriteLine();
-        switch (ex)
+        if (ex is YamlException yamlException)
         {
-            case YamlException yamlException:
-                WrapText(YamlExceptionHelp(yamlException), isContentManager);
-                break;
-            case ParsingException when ex.InnerException is FileNotFoundException fnfException:
-                WrapText(fnfException.Message, isContentManager);
-                break;
-            case ParsingException iniException:
-                WrapText(IniExceptionHelp(iniException), isContentManager);
-                break;
-            case IOException { InnerException: AddressInUseException } or SocketException { ErrorCode: 10048 }:
-                WrapText(AddressInUseExceptionHelp(), isContentManager);
-                break;
-            case ConfigurationException configurationException:
-                WrapText(configurationException.Message, isContentManager);
-                helpLink = configurationException.HelpLink;
-                break;
-            default:
-                WrapText(ex.Message, isContentManager);
-                break;
+            WrapText(YamlExceptionHelp(yamlException), isContentManager);
+        }
+        else if (ex is ParsingException iniException)
+        {
+            WrapText(IniExceptionHelp(iniException), isContentManager);
+        }
+        else if (ex is IOException { InnerException: AddressInUseException } or SocketException { ErrorCode: 10048 })
+        {
+            WrapText(AddressInUseExceptionHelp(), isContentManager);
+        }
+        else if (inner is ConfigurationException configurationException)
+        {
+            WrapText(configurationException.Message, isContentManager);
+            helpLink = configurationException.HelpLink;
         }
 
         Console.WriteLine(HorizontalSeparator);
@@ -75,23 +69,21 @@ internal static class ExceptionHelper
             Console.WriteLine("Press W to go to the AssettoServer website");
             Console.WriteLine("Press D to join the official Discord server");
             Console.WriteLine("Press any other key to exit");
-
-            if (!ACServer.IsDebugBuild)
+#if !DEBUG
+            var key = Console.ReadKey();
+            if (key.Key == ConsoleKey.D)
             {
-                var key = Console.ReadKey();
-                if (key.Key == ConsoleKey.D)
-                {
-                    OpenURL("https://discord.gg/uXEXRcSkyz");
-                }
-                else if (helpLink != null && key.Key == ConsoleKey.I)
-                {
-                    OpenURL(helpLink);
-                }
-                else if (key.Key == ConsoleKey.W)
-                {
-                    OpenURL("https://assettoserver.org/");
-                }
+                OpenURL("https://discord.gg/uXEXRcSkyz");
             }
+            else if (helpLink != null && key.Key == ConsoleKey.I)
+            {
+                OpenURL(helpLink);
+            }
+            else if (key.Key == ConsoleKey.W)
+            {
+                OpenURL("https://assettoserver.org/");
+            }
+#endif
 
             Console.ForegroundColor = old;
         }
@@ -124,7 +116,6 @@ internal static class ExceptionHelper
         return $"""
 YAML error. Check your extra_cfg.yml around line {ex.Start.Line}.
 When copying plugin configuration, make sure to copy EVERYTHING, including the "---".
-{ex.Message}
 """;
     }
 
@@ -132,7 +123,6 @@ When copying plugin configuration, make sure to copy EVERYTHING, including the "
     {
         return $"""
 INI error. Check your server_cfg.ini or entry_list.ini around line {ex.LineNumber}.
-{ex.Message}
 """;
     }
 

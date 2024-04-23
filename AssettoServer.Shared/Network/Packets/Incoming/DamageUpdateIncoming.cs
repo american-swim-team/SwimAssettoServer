@@ -1,13 +1,15 @@
-﻿using AssettoServer.Shared.Model;
-
-namespace AssettoServer.Shared.Network.Packets.Incoming;
+﻿namespace AssettoServer.Shared.Network.Packets.Incoming;
 
 public struct DamageUpdateIncoming : IIncomingNetworkPacket
 {
-    public DamageZoneLevel DamageZoneLevel;
+    public float[] DamageZoneLevel;
 
     public void FromReader(PacketReader reader)
     {
-        DamageZoneLevel = reader.Read<DamageZoneLevel>();
+        DamageZoneLevel = new float[5];
+        for (int i = 0; i < 5; i++)
+        {
+            DamageZoneLevel[i] = reader.Read<float>();
+        }
     }
 }

@@ -1,19 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+﻿using System.Collections.Generic;
 using AssettoServer.Server.Configuration;
 using IniParser.Model;
-using JetBrains.Annotations;
-using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
 namespace AssettoServer.Server;
 
-[PublicAPI]
 public class CSPServerScriptProvider
 {
-    internal List<Func<IActionResult>> Scripts { get; } = new();
+    internal List<string> Scripts { get; } = new();
 
     private readonly CSPServerExtraOptions _cspServerExtraOptions;
 
@@ -21,43 +15,27 @@ public class CSPServerScriptProvider
     {
         _cspServerExtraOptions = cspServerExtraOptions;
     }
-
-    public virtual void AddScript(Stream stream, string? debugFilename = null, Dictionary<string, object>? configuration = null)
-    {
-        using var memory = new MemoryStream();
-        stream.CopyTo(memory);
-        var bytes = memory.ToArray();
-        AddScript(bytes, debugFilename, configuration);
-    }
-
-    public virtual void AddScriptFile(string path, string? debugFilename = null, Dictionary<string, object>? configuration = null)
-        => AddScriptInternal(() => new PhysicalFileResult(path, "text/x-lua") { FileDownloadName = debugFilename }, debugFilename, configuration);
     
-    public virtual void AddScript(string script, string? debugFilename = null, Dictionary<string, object>? configuration = null)
+    public void AddScript(string script, string? debugFilename = null, Dictionary<string, object>? configuration = null)
     {
-        var bytes = Encoding.UTF8.GetBytes(script);
-        AddScript(bytes, debugFilename, configuration);
-    }
+        bool debug = false;
+        #if DEBUG
+        debug = true;
+        #endif
 
-    public virtual void AddScript(byte[] script, string? debugFilename = null, Dictionary<string, object>? configuration = null) 
-        => AddScriptInternal(() => new FileContentResult(script, "text/x-lua") { FileDownloadName = debugFilename }, debugFilename, configuration);
-
-    private void AddScriptInternal(Func<IActionResult> script, string? debugFilename = null, Dictionary<string, object>? configuration = null)
-    {
         var data = new IniData();
-        var scriptSection = data[$"SCRIPT_{10 + Scripts.Count}-{debugFilename}"];
+        var scriptSection = data["SCRIPT_..."];
 
-        if (ACServer.IsDebugBuild && !string.IsNullOrEmpty(debugFilename))
+        if (debug && !string.IsNullOrEmpty(debugFilename))
         {
             Log.Warning("Loading Lua script {File} locally, don't forget to sync changes for release", debugFilename);
             scriptSection["SCRIPT"] = debugFilename;
         }
         else
         {
-            scriptSection["SCRIPT"] = $"'http://{{ServerIP}}:{{ServerHTTPPort}}/api/scripts/{Scripts.Count}'";
+            Scripts.Add(script);
+            scriptSection["SCRIPT"] = $"'http://{{ServerIP}}:{{ServerHTTPPort}}/api/scripts/{Scripts.Count - 1}'";
         }
-        
-        Scripts.Add(script);
 
         if (configuration != null)
         {

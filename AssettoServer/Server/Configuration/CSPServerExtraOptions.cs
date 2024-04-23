@@ -1,9 +1,7 @@
 ﻿using System.IO;
-using System.Text;
-using AssettoServer.Network.Tcp;
 using AssettoServer.Shared.Network.Packets.Outgoing;
 using AssettoServer.Shared.Utils;
-using AssettoServer.Utils;
+using Serilog;
 
 namespace AssettoServer.Server.Configuration;
 
@@ -12,19 +10,39 @@ public class CSPServerExtraOptions
 {
     private readonly ACServerConfiguration _configuration;
 
-    public event EventHandler<ACTcpClient, WelcomeMessageSendingEventArgs>? WelcomeMessageSending;
-    public event EventHandler<ACTcpClient, CSPServerExtraOptionsSendingEventArgs>? CSPServerExtraOptionsSending;
+    public string WelcomeMessage
+    {
+        get => _welcomeMessage;
+        set
+        {
+            _welcomeMessage = value;
+            Encode();
+        }
+    }
 
-    public event EventHandler<ACTcpClient, WelcomeMessageSentEventArgs>? WelcomeMessageSent; 
+    public string ExtraOptions
+    {
+        get => _extraOptions;
+        set
+        {
+            _extraOptions = value;
+            Encode();
+        }
+    }
+    public string EncodedWelcomeMessage { get; private set; }
 
-    public string WelcomeMessage { get; set; }
-    public string ExtraOptions { get; set; }
+    private bool _hasShownMessageLengthWarning;
+    private string _welcomeMessage;
+    private string _extraOptions;
 
     public CSPServerExtraOptions(ACServerConfiguration configuration)
     {
         _configuration = configuration;
-        (WelcomeMessage, ExtraOptions) = CSPServerExtraOptionsParser.Decode(_configuration.WelcomeMessage);
         
+        (_welcomeMessage, _extraOptions) = CSPServerExtraOptionsParser.Decode(configuration.WelcomeMessage);
+        EncodedWelcomeMessage = CSPServerExtraOptionsParser.Encode(_welcomeMessage, _extraOptions);
+        
+        WelcomeMessage += LegalNotice.WelcomeMessage;
         if (configuration.Extra.EnableCustomUpdate)
         {
             ExtraOptions += $"\r\n[EXTRA_DATA]\r\nCUSTOM_UPDATE_FORMAT = '{CSPPositionUpdate.CustomUpdateFormat}'";
@@ -34,47 +52,24 @@ public class CSPServerExtraOptions
         {
             ExtraOptions += "\r\n[EXTRA_TWEAKS]\r\nVERIFY_STEAM_API_INTEGRITY = 1";
         }
-        
-        if (!ExtraOptions.Contains("MIN_TIME_BETWEEN_COLLISIONS"))
-        {
-            ExtraOptions += "\r\n[EXTRA_TWEAKS]\r\nMIN_TIME_BETWEEN_COLLISIONS = 2\r\n";
-        }
+
+        ExtraOptions += "\r\n" + configuration.CSPExtraOptions;
     }
-
-    internal string GenerateWelcomeMessage(ACTcpClient client)
+    
+    private void Encode()
     {
-        var sb = new StringBuilder();
-        sb.Append(WelcomeMessage);
-        WelcomeMessageSending?.Invoke(client, new WelcomeMessageSendingEventArgs { Builder = sb });
-        sb.Append(LegalNotice.WelcomeMessage);
-        var welcomeMessage = sb.ToString();
-
-        sb.Clear();
+        EncodedWelcomeMessage = CSPServerExtraOptionsParser.Encode(_welcomeMessage, _extraOptions);
         
-        sb.AppendLine(ExtraOptions);
-        sb.AppendLine(_configuration.CSPExtraOptions);
-        CSPServerExtraOptionsSending?.Invoke(client, new CSPServerExtraOptionsSendingEventArgs { Builder = sb });
-        var extraOptions = sb.ToString();
-
-        var encodedWelcomeMessage = CSPServerExtraOptionsParser.Encode(welcomeMessage, extraOptions);
+        if (!_hasShownMessageLengthWarning && EncodedWelcomeMessage.Length > 2039)
+        {
+            _hasShownMessageLengthWarning = true;
+            Log.Warning("Long welcome message detected. This will lead to crashes on CSP versions older than 0.1.77");
+        }
 
         if (_configuration.Extra.DebugWelcomeMessage)
         {
-            File.WriteAllText(Path.Join(_configuration.BaseFolder, $"debug_welcome.{client.SessionId}.txt"), encodedWelcomeMessage);
-            File.WriteAllText(Path.Join(_configuration.BaseFolder, $"debug_csp_extra_options.{client.SessionId}.ini"), extraOptions);
+            File.WriteAllText(Path.Join(_configuration.BaseFolder, "debug_welcome.txt"), EncodedWelcomeMessage);
+            File.WriteAllText(Path.Join(_configuration.BaseFolder, "debug_csp_extra_options.ini"), ExtraOptions);
         }
-
-        if (encodedWelcomeMessage.Length > 2039 && client.CSPVersion is null or < CSPVersion.V0_1_77)
-        {
-            client.Logger.Warning("Welcome message is too long for {Name} ({SessionId}), their game will crash. Consider setting a minimum CSP version of 0.1.77 (1937)", client.Name, client.SessionId);
-        }
-        
-        WelcomeMessageSent?.Invoke(client, new WelcomeMessageSentEventArgs
-        {
-            ExtraOptions = extraOptions,
-            WelcomeMessage = welcomeMessage,
-            EncodedWelcomeMessage = encodedWelcomeMessage
-        });
-        return encodedWelcomeMessage;
     }
 }

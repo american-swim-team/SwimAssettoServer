@@ -35,7 +35,7 @@ public partial class EntryCar
     public float AiCorneringSpeedFactor { get; set; }
     public float AiCorneringBrakeDistanceFactor { get; set; }
     public float AiCorneringBrakeForceFactor { get; set; }
-    public float AiSplineHeightOffsetMeters { get; set; }
+    public float AiSplineHeightOffsetMeters { get; set; } = 0;
     public int? AiMaxOverbooking { get; set; }
     public int AiMinSpawnProtectionTimeMilliseconds { get; set; }
     public int AiMaxSpawnProtectionTimeMilliseconds { get; set; }
@@ -75,7 +75,7 @@ public partial class EntryCar
         TyreDiameterMeters = _configuration.Extra.AiParams.TyreDiameterMeters;
         AiMinSpawnProtectionTimeMilliseconds = _configuration.Extra.AiParams.MinSpawnProtectionTimeMilliseconds;
         AiMaxSpawnProtectionTimeMilliseconds = _configuration.Extra.AiParams.MaxSpawnProtectionTimeMilliseconds;
-        AiMinCollisionStopTimeMilliseconds = _configuration.Extra.AiParams.MinCollisionStopTimeMilliseconds;
+        AiMinCollisionStopTimeMilliseconds = _configuration.Extra.AiParams.MaxCollisionStopTimeMilliseconds;
         AiMaxCollisionStopTimeMilliseconds = _configuration.Extra.AiParams.MaxCollisionStopTimeMilliseconds;
 
         foreach (var carOverrides in _configuration.Extra.AiParams.CarSpecificOverrides)

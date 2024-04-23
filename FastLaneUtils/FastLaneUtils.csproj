@@ -12,12 +12,12 @@
     <PublishDir Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">..\out-linux-arm64\utils</PublishDir>
     <PublishDir Condition="'$(RuntimeIdentifier)' == 'win-x64'">..\out-win-x64\utils</PublishDir>
     <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    <ProjectGuid>{5A1B1D01-4F03-48A7-B4CF-7390D1671A2D}</ProjectGuid>
+    <ProjectGuid>{3BB3056B-8187-4217-8CC2-963045C840D7}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="JetBrains.Annotations" Version="2023.3.0" />
-    <PackageReference Include="Serilog" Version="3.1.1" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.0" />
+    <PackageReference Include="JetBrains.Annotations" Version="2023.2.0" />
+    <PackageReference Include="Serilog" Version="3.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
   </ItemGroup>
 </Project>

@@ -88,9 +88,8 @@ public class CSPClientMessageHandler(CSPClientMessageTypeManager cspClientMessag
                     {
                         sender.Logger.Verbose("Client message received from {ClientName} ({SessionId}), type {Type}, data {Data}",
                             sender.Name, sender.SessionId, packetType, clientMessage.Data);
+                        _entryCarManager.BroadcastPacket(clientMessage);
                     }
-                    
-                    _entryCarManager.BroadcastPacket(clientMessage);
                 }
 
                 break;

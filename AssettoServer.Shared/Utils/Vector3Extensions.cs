@@ -1,6 +1,7 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 
-namespace AssettoServer.Shared.Utils;
+namespace AssettoServer.Utils;
 
 public static class Vector3Extensions
 {

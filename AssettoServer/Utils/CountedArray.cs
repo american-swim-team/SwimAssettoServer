@@ -3,7 +3,7 @@
 public class CountedArray<T>
 {
     public readonly T[] Array;
-    public int Count { get; private set; }
+    public int Count { get; private set; } = 0;
 
     public CountedArray(int maxLength)
     {

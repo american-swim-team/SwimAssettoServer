@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
 using AssettoServer.Shared.Network.Packets.Outgoing;
-using AssettoServer.Shared.Utils;
+using AssettoServer.Utils;
 
 namespace AssettoServer.Shared.Network.Packets.Incoming;
 

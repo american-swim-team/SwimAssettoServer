@@ -2,15 +2,16 @@
 using System.Threading;
 using System.Threading.Tasks;
 using AssettoServer.Server.Configuration;
+using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
 
 namespace AssettoServer.Server.UserGroup;
 
-public class FileBasedUserGroupProvider : IHostedService, IUserGroupProvider
+public class FileBasedUserGroupProvider : CriticalBackgroundService, IUserGroupProvider
 {
     private readonly Dictionary<string, FileBasedUserGroup> _userGroups = new();
 
-    public FileBasedUserGroupProvider(ACServerConfiguration configuration, FileBasedUserGroup.Factory fileBasedUserGroupFactory)
+    public FileBasedUserGroupProvider(ACServerConfiguration configuration, FileBasedUserGroup.Factory fileBasedUserGroupFactory, IHostApplicationLifetime lifetime) : base(lifetime)
     {
         foreach ((string name, string path) in configuration.Extra.UserGroups)
         {
@@ -23,21 +24,11 @@ public class FileBasedUserGroupProvider : IHostedService, IUserGroupProvider
         return _userGroups.TryGetValue(name, out var group) ? group : null;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         foreach (var group in _userGroups.Values)
         {
             await group.LoadAsync();
         }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (var group in _userGroups.Values)
-        {
-            group.Dispose();
-        }
-        
-        return Task.CompletedTask;
     }
 }

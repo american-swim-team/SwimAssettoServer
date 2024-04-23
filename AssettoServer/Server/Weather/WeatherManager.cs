@@ -142,7 +142,7 @@ public class WeatherManager : CriticalBackgroundService
     private async Task LoopAsync(CancellationToken token)
     {
         var lastTimeUpdate = _timeSource.ServerTimeMilliseconds;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         
         while (await timer.WaitForNextTickAsync(token))
         {

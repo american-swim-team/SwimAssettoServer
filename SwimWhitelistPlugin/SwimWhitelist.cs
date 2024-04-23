@@ -25,7 +25,7 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
         _entryCarManager = entryCarManager;
     }
 
-    public override async Task<AuthFailedResponse?> ShouldAcceptConnectionAsync(ACTcpClient client, HandshakeRequest request)
+    public override Task<AuthFailedResponse?> ShouldAcceptConnectionAsync(ACTcpClient client, HandshakeRequest request)
     {
         var rolesToCheck = new List<long>();
         var EntryCars = _entryCarManager.EntryCars;
@@ -74,7 +74,7 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
         }
         if (rolesToCheck.Count == 0) // If no roles are set, accept the connection
         {
-            return await base.ShouldAcceptConnectionAsync(client, request);
+            return base.ShouldAcceptConnectionAsync(client, request);
         }
 
         // Check roles using the API endpoint
@@ -95,17 +95,17 @@ public class SwimWhitelistFilter : OpenSlotFilterBase
         if (responseJson == null)
         {
             Log.Error("Failed to deserialize JSON response from {EndpointUrl}", _config.EndpointUrl);
-            return new AuthFailedResponse("Failed to deserialize JSON response from the API endpoint");
+            return Task.FromResult<AuthFailedResponse?>(new AuthFailedResponse("Failed to deserialize JSON response from the API endpoint."));
         }
 
         // check if responseJSON status is UNAUTHORIZED or no steamid was found (417 server response code)
         if (responseJson["status"] == "UNAUTHORIZED" || response.StatusCode == System.Net.HttpStatusCode.ExpectationFailed)
         {
             Log.Information("User {SteamId} is not authorized", request.Guid);
-            return new AuthFailedResponse("This slot is whitelisted, make sure you have the appropriate roles on discord. If you have the appropriate roles, use the /link command in discord to link your steamid!");
+            return Task.FromResult<AuthFailedResponse?>(new AuthFailedResponse("This slot is whitelisted, make sure you have the appropriate roles on discord. If you have the appropriate roles, use the /link command in discord to link your steamid!"));
         }
 
         Log.Information("User {SteamId} is authorized / slot doesn't require authorization", request.Guid);
-        return await base.ShouldAcceptConnectionAsync(client, request);
+        return base.ShouldAcceptConnectionAsync(client, request);
     }
 }

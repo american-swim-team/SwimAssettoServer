@@ -1,7 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Numerics;
-using System.Text;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Shared.Network.Packets.Outgoing;
 using AssettoServer.Shared.Network.Packets.Outgoing.Handshake;
@@ -12,23 +11,6 @@ namespace AssettoServer.Server;
 
 public delegate void EventHandler<TSender, TArgs>(TSender sender, TArgs args) where TArgs : EventArgs;
 public delegate void EventHandlerIn<TSender, TArg>(TSender sender, in TArg args) where TArg : struct;
-
-public class WelcomeMessageSentEventArgs : EventArgs
-{
-    public required string WelcomeMessage { get; init; }
-    public required string ExtraOptions { get; init; }
-    public required string EncodedWelcomeMessage { get; init; }
-}
-
-public class WelcomeMessageSendingEventArgs : EventArgs
-{
-    public required StringBuilder Builder { get; init; }
-}
-
-public class CSPServerExtraOptionsSendingEventArgs : EventArgs
-{
-    public required StringBuilder Builder { get; init; }
-}
 
 public class HandshakeAcceptedEventArgs : DeferredEventArgs
 {
@@ -90,16 +72,6 @@ public class LapCompletedEventArgs : EventArgs
     public LapCompletedOutgoing Packet { get; }
     
     public LapCompletedEventArgs(LapCompletedOutgoing packet)
-    {
-        Packet = packet;
-    }
-}
-
-public class CarListResponseSendingEventArgs : EventArgs
-{
-    public CarListResponse Packet { get; }
-    
-    public CarListResponseSendingEventArgs(CarListResponse packet)
     {
         Packet = packet;
     }

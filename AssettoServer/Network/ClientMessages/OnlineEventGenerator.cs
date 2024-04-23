@@ -4,7 +4,6 @@ using System.IO;
 using System.Numerics;
 using System.Reflection;
 using System.Text;
-using AssettoServer.Server;
 using AssettoServer.Shared.Network.Packets;
 using AssettoServer.Shared.Network.Packets.Shared;
 using AssettoServer.Shared.Utils;
@@ -115,8 +114,7 @@ internal static class OnlineEventGenerator
             {
                 type = typeof(sbyte);
             }
-            
-            if (type.IsEnum)
+            else if (type.IsEnum)
             {
                 type = Enum.GetUnderlyingType(type);
             }
@@ -153,12 +151,9 @@ internal static class OnlineEventGenerator
             Structure = structure,
             PacketType = GenerateKey(structure)
         };
-
-        if (ACServer.IsDebugBuild)
-        {
-            Log.Debug("Parsed client message for {Class}, Type {Type:X}, Structure {Structure}",
-                messageType.Name, ret.PacketType, ret.Structure);
-        }
+        
+        Log.Verbose("Parsed client message for {Class}, Type {Type:X}, Structure {Structure}", 
+            messageType.Name, ret.PacketType, ret.Structure);
 
         return ret;
     }
@@ -267,7 +262,7 @@ internal static class OnlineEventGenerator
                 var elementType = field.Type.GetElementType()!;
                 var rosType = typeof(ReadOnlySpan<>).MakeGenericType(elementType);
                 var opImplicit = rosType.GetMethod("op_Implicit", 
-                    BindingFlags.Public | BindingFlags.Static, [field.Type])!;
+                    BindingFlags.Public | BindingFlags.Static, new[] { field.Type })!;
                 emitter.Call(opImplicit);
                 emitter.LoadConstant(field.Array.Value);
                 emitter.LoadConstant(i < message.Fields.Count - 1); // padding
