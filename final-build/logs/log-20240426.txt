@@ -1,0 +1,256 @@
+2024-04-26 18:58:17.621 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 18:58:17.656 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 18:58:17.665 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Could not parse file cfg/server_cfg.ini while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+ ---> System.IO.DirectoryNotFoundException: Could not find a part of the path '/home/john/daniel/SwimAssettoServer-copy/AssettoServer/bin/Debug/net8.0/linux-x64/cfg/server_cfg.ini'.
+   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String path, OpenFlags flags, Int32 mode, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, UnixFileMode openPermissions, Int64& fileLength, UnixFileMode& filePermissions, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.FileStream..ctor(String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.Open(String path, FileMode mode, FileAccess access, FileShare share)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   --- End of inner exception stack trace ---
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 61
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:14:37.180 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:14:37.213 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:14:37.224 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '------ UPDATE ------'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0 while parsing line number 53 with value '------ UPDATE ------' - IniParser version: 2.5.2.0
+ ---> IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '------ UPDATE ------'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+   at IniParser.Parser.IniDataParser.ProcessLine(String currentLine, IniData currentIniData)
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   --- End of inner exception stack trace ---
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   at IniParser.StreamIniDataParser.ReadData(StreamReader reader)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 61
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:15:48.992 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:15:49.025 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:15:49.036 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[BOOK]                     ; booking session - add this section only if your server is in booking mode'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0 while parsing line number 61 with value '[BOOK]                     ; booking session - add this section only if your server is in booking mode' - IniParser version: 2.5.2.0
+ ---> IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[BOOK]                     ; booking session - add this section only if your server is in booking mode'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+   at IniParser.Parser.IniDataParser.ProcessLine(String currentLine, IniData currentIniData)
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   --- End of inner exception stack trace ---
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   at IniParser.StreamIniDataParser.ReadData(StreamReader reader)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 61
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:16:20.761 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:16:20.793 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:16:20.804 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[WEATHER_0]                ; mandatory section for weather.'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0 while parsing line number 80 with value '[WEATHER_0]                ; mandatory section for weather.' - IniParser version: 2.5.2.0
+ ---> IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[WEATHER_0]                ; mandatory section for weather.'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+   at IniParser.Parser.IniDataParser.ProcessLine(String currentLine, IniData currentIniData)
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   --- End of inner exception stack trace ---
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   at IniParser.StreamIniDataParser.ReadData(StreamReader reader)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 61
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:16:42.391 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:16:42.431 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:16:42.448 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[WEATHER]                ; mandatory section for weather.'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0 while parsing line number 80 with value '[WEATHER]                ; mandatory section for weather.' - IniParser version: 2.5.2.0
+ ---> IniParser.Exceptions.ParsingException: Unknown file format. Couldn't parse the line: '[WEATHER]                ; mandatory section for weather.'. while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+   at IniParser.Parser.IniDataParser.ProcessLine(String currentLine, IniData currentIniData)
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   --- End of inner exception stack trace ---
+   at IniParser.Parser.IniDataParser.Parse(String iniDataString)
+   at IniParser.StreamIniDataParser.ReadData(StreamReader reader)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 61
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:16:54.506 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:16:54.539 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:16:54.557 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.MAX_CLIENTS. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '15             ; max number of clients (must be <= track's number of pits)' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Int32.Parse(String s)
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:18:28.729 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:18:28.765 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:18:28.788 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.MAX_CLIENTS. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '10             ; max number of clients (must be <= track's number of pits)' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Int32.Parse(String s)
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:22:04.722 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:22:04.754 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:22:04.786 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.FUEL_RATE. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '0.75%' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Single.Parse(String s)
+   at InvokeStub_Single.Parse(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:22:32.237 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:22:32.271 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:22:32.300 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.FUEL_RATE. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '75%' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Single.Parse(String s)
+   at InvokeStub_Single.Parse(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:22:43.603 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:22:43.636 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:22:43.663 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.DAMAGE_MULTIPLIER. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '1.5%' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Single.Parse(String s)
+   at InvokeStub_Single.Parse(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:22:53.744 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:22:53.776 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:22:53.803 +02:00 [FTL] Error starting server
+AssettoServer.Server.Configuration.ConfigurationException: Error setting property SERVER.TYRE_WEAR_RATE. Make sure the value is in the correct format.
+ ---> System.FormatException: The input string '0.8%' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Single.Parse(String s)
+   at InvokeStub_Single.Parse(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   --- End of inner exception stack trace ---
+   at AssettoServer.Utils.IniDataExtensions.Deserialize(IniData data, Object target, Type type, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 44
+   at AssettoServer.Utils.IniDataExtensions.Deserialize[T](IniData data, T target, String section) in AssettoServer/Utils/IniDataExtensions.cs:line 89
+   at AssettoServer.Utils.IniDataExtensions.DeserializeObject[T](IniData data) in AssettoServer/Utils/IniDataExtensions.cs:line 95
+   at AssettoServer.Server.Configuration.ServerConfiguration.FromFile(String path) in AssettoServer/Server/Configuration/ServerConfiguration.cs:line 62
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 66
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:23:06.697 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:23:06.730 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:23:06.755 +02:00 [DBG] Loading entry_list.ini from cfg/entry_list.ini
+2024-04-26 19:23:06.758 +02:00 [FTL] Error starting server
+IniParser.Exceptions.ParsingException: Could not parse file cfg/entry_list.ini while parsing line number 0 with value '' - IniParser version: 2.5.2.0
+ ---> System.IO.FileNotFoundException: Could not find file '/home/john/daniel/SwimAssettoServer-copy/AssettoServer/bin/Debug/net8.0/linux-x64/cfg/entry_list.ini'.
+File name: '/home/john/daniel/SwimAssettoServer-copy/AssettoServer/bin/Debug/net8.0/linux-x64/cfg/entry_list.ini'
+   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String path, OpenFlags flags, Int32 mode, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, UnixFileMode openPermissions, Int64& fileLength, UnixFileMode& filePermissions, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.FileStream..ctor(String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.Open(String path, FileMode mode, FileAccess access, FileShare share)
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   --- End of inner exception stack trace ---
+   at IniParser.FileIniDataParser.ReadFile(String filePath, Encoding fileEncoding)
+   at IniParser.FileIniDataParser.ReadFile(String filePath)
+   at AssettoServer.Server.Configuration.EntryList.FromFile(String path) in AssettoServer/Server/Configuration/EntryList.cs:line 31
+   at AssettoServer.Server.Configuration.ACServerConfiguration..ctor(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir) in AssettoServer/Server/Configuration/ACServerConfiguration.cs:line 69
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 75
+2024-04-26 19:23:31.748 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 19:23:31.780 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 19:23:31.807 +02:00 [DBG] Loading entry_list.ini from cfg/entry_list.ini
+2024-04-26 19:23:31.810 +02:00 [WRN] Welcome message not found at /home/john/daniel/SwimAssettoServer-copy/AssettoServer/bin/Debug/net8.0/linux-x64/random_welcome_message_path
+2024-04-26 19:23:31.811 +02:00 [DBG] Loading extra_cfg.yml from cfg/extra_cfg.yml
+2024-04-26 19:23:32.052 +02:00 [FTL] Error starting server
+System.IO.DirectoryNotFoundException: Could not find a part of the path '/home/john/daniel/SwimAssettoServer-copy/AssettoServer/bin/Debug/net8.0/linux-x64/plugins'.
+   at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
+   at System.IO.Enumeration.FileSystemEnumerableFactory.UserDirectories(String directory, String expression, EnumerationOptions options)
+   at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+   at System.IO.Directory.GetDirectories(String path, String searchPattern, EnumerationOptions enumerationOptions)
+   at AssettoServer.Server.Plugin.ACPluginLoader.ScanDirectory(String path) in AssettoServer/Server/Plugin/ACPluginLoader.cs:line 37
+   at AssettoServer.Server.Plugin.ACPluginLoader..ctor(Boolean loadFromWorkdir) in AssettoServer/Server/Plugin/ACPluginLoader.cs:line 32
+   at AssettoServer.Network.Http.Startup..ctor(ACServerConfiguration configuration) in AssettoServer/Network/Http/Startup.cs:line 41
+   at AssettoServer.Program.<>c__DisplayClass3_0.<RunServerAsync>b__3(WebHostBuilderContext _) in AssettoServer/Program.cs:line 98
+   at Microsoft.AspNetCore.Hosting.GenericWebHostBuilder.<>c__DisplayClass8_0`1.<UseStartup>g__ConfigureStartup|0(HostBuilderContext context, IServiceCollection services)
+   at Microsoft.Extensions.Hosting.HostBuilder.InitializeServiceProvider()
+   at Microsoft.Extensions.Hosting.HostBuilder.Build()
+   at AssettoServer.Program.RunServerAsync(String preset, String serverCfgPath, String entryListPath, Boolean loadPluginsFromWorkdir, CancellationToken token) in AssettoServer/Program.cs:line 91
+2024-04-26 20:23:21.734 +02:00 [INF] AssettoServer 0.0.55+34c2c35dc3
+2024-04-26 20:23:21.765 +02:00 [DBG] Loading server_cfg.ini from cfg/server_cfg.ini
+2024-04-26 20:23:21.803 +02:00 [DBG] Loading entry_list.ini from cfg/entry_list.ini
+2024-04-26 20:23:21.807 +02:00 [WRN] Welcome message not found at /home/john/daniel/SwimAssettoServer-copy/final-build/random_welcome_message_path
+2024-04-26 20:23:21.808 +02:00 [DBG] Loading extra_cfg.yml from cfg/extra_cfg.yml
+2024-04-26 20:23:21.997 +02:00 [INF] Loaded plugin UserGroupPlugin
+2024-04-26 20:23:22.141 +02:00 [DBG] Parsed client message for ApiKeyPacket, Type 27612FAB, Structure char key[32];//AS_ApiKey
+2024-04-26 20:23:22.265 +02:00 [ERR] fucking failure 1
+2024-04-26 20:23:22.267 +02:00 [ERR] fucking failure 3
+2024-04-26 20:23:22.335 +02:00 [INF] Starting server
+2024-04-26 20:23:22.336 +02:00 [WRN] Loading Lua script assettoserver.lua locally, don't forget to sync changes for release
+2024-04-26 20:23:22.449 +02:00 [INF] File blacklist.txt changed on disk, reloading
+2024-04-26 20:23:22.449 +02:00 [DBG] Loaded blacklist.txt with 0 entries
+2024-04-26 20:23:22.451 +02:00 [INF] File whitelist.txt changed on disk, reloading
+2024-04-26 20:23:22.451 +02:00 [DBG] Loaded whitelist.txt with 0 entries
+2024-04-26 20:23:22.451 +02:00 [INF] File admins.txt changed on disk, reloading
+2024-04-26 20:23:22.451 +02:00 [DBG] Loaded admins.txt with 0 entries
+2024-04-26 20:23:22.452 +02:00 [INF] Starting HTTP server on port 8081
+2024-04-26 20:23:22.454 +02:00 [INF] Loaded 0 cars
+2024-04-26 20:23:22.455 +02:00 [INF] Initialized 0 track checksums
+2024-04-26 20:23:22.458 +02:00 [DBG] Loaded admins.txt with 0 entries
+2024-04-26 20:23:22.458 +02:00 [DBG] Loaded blacklist.txt with 0 entries
+2024-04-26 20:23:22.458 +02:00 [DBG] Loaded whitelist.txt with 0 entries
+2024-04-26 20:23:22.459 +02:00 [INF] Initialized 0 car checksums
+2024-04-26 20:23:22.461 +02:00 [INF] Next session: ""
+2024-04-26 20:23:22.462 +02:00 [INF] Switching session to id 0
+2024-04-26 20:23:28.084 +02:00 [INF] Server invite link: https://acstuff.ru/s/q:race/online/join?ip=197.233.0.221&httpPort=8081
+2024-04-26 20:23:28.086 +02:00 [INF] cfg/data_track_params.ini not found, downloading from GitHub...
+2024-04-26 20:23:28.089 +02:00 [INF] Starting TCP server on port 9600
+2024-04-26 20:23:28.091 +02:00 [INF] Starting UDP server on port 9600
+2024-04-26 20:23:28.097 +02:00 [INF] Registering server to lobby...
+2024-04-26 20:23:28.100 +02:00 [INF] Starting update loop with an update rate of 20hz
+2024-04-26 20:23:30.447 +02:00 [ERR] Error during Kunos lobby registration
+AssettoServer.Server.KunosLobbyException: ERROR,INVALID SERVER,CHECK YOUR PORT FORWARDING SETTINGS
+   at AssettoServer.Server.KunosLobbyRegistration.RegisterToLobbyAsync(CancellationToken token) in AssettoServer/Server/KunosLobbyRegistration.cs:line 113
+   at AssettoServer.Server.KunosLobbyRegistration.ExecuteAsync(CancellationToken stoppingToken) in AssettoServer/Server/KunosLobbyRegistration.cs:line 37
+2024-04-26 20:23:31.835 +02:00 [WRN] Using UTC as default time zone
+2024-04-26 20:24:02.406 +02:00 [ERR] Error checking user in group
+AssettoServer.Server.Configuration.ConfigurationException: No user group found with name default_admins888
+   at AssettoServer.Server.UserGroup.UserGroupManager.Resolve(String name) in AssettoServer/Server/UserGroup/UserGroupManager.cs:line 33
+   at UserGroupPlugin.UserGroupController.CheckUserInGroup(String group, UInt64 guid) in /home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/UserGroupController.cs:line 26
