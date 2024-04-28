@@ -1,0 +1,13 @@
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/bin/Debug/net8.0/win-x64/UserGroupPlugin.deps.json
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/bin/Debug/net8.0/win-x64/UserGroupPlugin.runtimeconfig.json
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/bin/Debug/net8.0/win-x64/UserGroupPlugin.dll
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.csproj.AssemblyReference.cache
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.GeneratedMSBuildEditorConfig.editorconfig
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.AssemblyInfoInputs.cache
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.AssemblyInfo.cs
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.csproj.CoreCompileInputs.cache
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.sourcelink.json
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.dll
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/refint/UserGroupPlugin.dll
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/UserGroupPlugin.genruntimeconfig.cache
+/home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/obj/Debug/net8.0/win-x64/ref/UserGroupPlugin.dll
