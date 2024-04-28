@@ -1,0 +1,41 @@
+2024-04-27 15:34:24.709 +02:00 [INF] AssettoServer 0.0.55+24544b7cb4
+2024-04-27 15:34:24.860 +02:00 [DBG] Loading server_cfg.ini from cfg\server_cfg.ini
+2024-04-27 15:34:24.895 +02:00 [DBG] Loading entry_list.ini from cfg\entry_list.ini
+2024-04-27 15:34:24.899 +02:00 [WRN] Welcome message not found at C:\Users\finan\Downloads\SwimAssettoServer2\SwimAssettoServer-copy\final-build-win\random_welcome_message_path
+2024-04-27 15:34:24.907 +02:00 [DBG] Loading extra_cfg.yml from cfg\extra_cfg.yml
+2024-04-27 15:34:26.124 +02:00 [INF] Loaded plugin UserGroupPlugin
+2024-04-27 15:34:26.411 +02:00 [DBG] Parsed client message for ApiKeyPacket, Type 27612FAB, Structure char key[32];//AS_ApiKey
+2024-04-27 15:34:26.730 +02:00 [INF] Starting server
+2024-04-27 15:34:26.731 +02:00 [WRN] Loading Lua script assettoserver.lua locally, don't forget to sync changes for release
+2024-04-27 15:34:26.990 +02:00 [DBG] Loaded blacklist.txt with 0 entries
+2024-04-27 15:34:26.993 +02:00 [DBG] Loaded whitelist.txt with 0 entries
+2024-04-27 15:34:26.994 +02:00 [DBG] Loaded admins.txt with 0 entries
+2024-04-27 15:34:26.996 +02:00 [INF] Starting HTTP server on port 8081
+2024-04-27 15:34:26.997 +02:00 [INF] Loaded 0 cars
+2024-04-27 15:34:26.999 +02:00 [INF] Initialized 0 track checksums
+2024-04-27 15:34:27.003 +02:00 [INF] Initialized 0 car checksums
+2024-04-27 15:34:27.005 +02:00 [INF] Next session: ""
+2024-04-27 15:34:27.005 +02:00 [INF] Switching session to id 0
+2024-04-27 15:34:31.049 +02:00 [INF] Server invite link: https://acstuff.ru/s/q:race/online/join?ip=105.232.111.211&httpPort=8081
+2024-04-27 15:34:31.052 +02:00 [INF] cfg/data_track_params.ini not found, downloading from GitHub...
+2024-04-27 15:34:31.055 +02:00 [INF] Starting TCP server on port 9600
+2024-04-27 15:34:31.058 +02:00 [INF] Starting UDP server on port 9600
+2024-04-27 15:34:31.314 +02:00 [INF] Registering server to lobby...
+2024-04-27 15:34:31.319 +02:00 [INF] Starting update loop with an update rate of 20hz
+2024-04-27 15:34:32.233 +02:00 [WRN] Using UTC as default time zone
+2024-04-27 15:34:33.506 +02:00 [ERR] Error during Kunos lobby registration
+AssettoServer.Server.KunosLobbyException: ERROR,INVALID SERVER,CHECK YOUR PORT FORWARDING SETTINGS
+   at AssettoServer.Server.KunosLobbyRegistration.RegisterToLobbyAsync(CancellationToken token) in AssettoServer/Server/KunosLobbyRegistration.cs:line 113
+   at AssettoServer.Server.KunosLobbyRegistration.ExecuteAsync(CancellationToken stoppingToken) in AssettoServer/Server/KunosLobbyRegistration.cs:line 37
+2024-04-27 15:36:18.748 +02:00 [INF] File admins.txt changed on disk, reloading
+2024-04-27 15:36:18.760 +02:00 [INF] File admins.txt changed on disk, reloading
+2024-04-27 15:36:18.836 +02:00 [DBG] Loaded admins.txt with 1 entries
+2024-04-27 15:36:18.840 +02:00 [DBG] Loaded admins.txt with 1 entries
+2024-04-27 16:17:16.683 +02:00 [ERR] Error checking user in group
+AssettoServer.Server.Configuration.ConfigurationException: No user group found with name default_adminw
+   at AssettoServer.Server.UserGroup.UserGroupManager.Resolve(String name) in AssettoServer/Server/UserGroup/UserGroupManager.cs:line 33
+   at UserGroupPlugin.UserGroupController.CheckUserInGroup(String group, UInt64 guid) in /home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/UserGroupController.cs:line 26
+2024-04-27 16:18:51.090 +02:00 [ERR] Error checking user in group
+AssettoServer.Server.Configuration.ConfigurationException: No user group found with name default_driver
+   at AssettoServer.Server.UserGroup.UserGroupManager.Resolve(String name) in AssettoServer/Server/UserGroup/UserGroupManager.cs:line 33
+   at UserGroupPlugin.UserGroupController.CheckUserInGroup(String group, UInt64 guid) in /home/john/daniel/SwimAssettoServer-copy/UserGroupPlugin/UserGroupController.cs:line 26
