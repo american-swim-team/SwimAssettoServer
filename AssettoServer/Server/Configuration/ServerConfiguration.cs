@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Reflection;
 using AssettoServer.Utils;
 using IniParser;
 using IniParser.Model;
@@ -9,13 +11,18 @@ namespace AssettoServer.Server.Configuration;
 [UsedImplicitly(ImplicitUseKindFlags.Assign, ImplicitUseTargetFlags.WithMembers)]
 public class ServerConfiguration
 {
+
+    private static readonly ushort DefaultUdpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_UDP_PORT"), out var udpPort) ? udpPort : (ushort)9600;
+    private static readonly ushort DefaultTcpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_TCP_PORT"), out var tcpPort) ? tcpPort : (ushort)9600;
+    private static readonly ushort DefaultHttpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_HTTP_PORT"), out var httpPort) ? httpPort : (ushort)8081;
+
     [IniField("SERVER", "NAME")] public string Name { get; set; } = "AssettoServer";
     [IniField("SERVER", "PASSWORD")] public string? Password { get; set; }
     [IniField("SERVER", "ADMIN_PASSWORD")] public string? AdminPassword { get; set; }
     [IniField("SERVER", "MAX_CLIENTS")] public int MaxClients { get; init; }
-    [IniField("SERVER", "UDP_PORT")] public ushort UdpPort { get; init; } = 9600;
-    [IniField("SERVER", "TCP_PORT")] public ushort TcpPort { get; init; } = 9600;
-    [IniField("SERVER", "HTTP_PORT")] public ushort HttpPort { get; init; } = 8081;
+    [IniField("SERVER", "UDP_PORT")] public ushort UdpPort { get; init; } = DefaultUdpPort;
+    [IniField("SERVER", "TCP_PORT")] public ushort TcpPort { get; init; } = DefaultTcpPort;
+    [IniField("SERVER", "HTTP_PORT")] public ushort HttpPort { get; init; } = DefaultHttpPort;
     [IniField("SERVER", "CLIENT_SEND_INTERVAL_HZ")] public byte RefreshRateHz { get; init; } = 20;
     [IniField("SERVER", "TRACK")] public string Track { get; init; } = "";
     [IniField("SERVER", "CONFIG_TRACK")] public string TrackConfig { get; init; } = "";
