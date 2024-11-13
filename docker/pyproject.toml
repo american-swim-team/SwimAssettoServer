@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "AssettoServer S3 Launcher"
+version = "0.1.0"
+description = "A Python script to download files from Linode S3 and launch AssettoServer"
+authors = ["Romedius <r@romedius.xyz>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+python-dotenv = "^0.19.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
