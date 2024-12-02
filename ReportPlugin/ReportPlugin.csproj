@@ -1,31 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <EnableDynamicLoading>true</EnableDynamicLoading>
-        <SelfContained>false</SelfContained>
-        <DebugType>embedded</DebugType>
-        <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
-        <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    </PropertyGroup>
-
-    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-        <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
-            <Private>false</Private>
-            <ExcludeAssets>runtime</ExcludeAssets>
-        </ProjectReference>
-        <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
-            <Private>false</Private>
-            <ExcludeAssets>runtime</ExcludeAssets>
-        </ProjectReference>
-        <PackageReference Include="CSharpDiscordWebhookAsync" Version="1.0.2" />
-    </ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <SelfContained>false</SelfContained>
+    <DebugType>embedded</DebugType>
+    <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
+    <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
+    <ProjectGuid>{148A81DB-0050-401A-8AA8-07A1241CA6FD}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
+    <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <PackageReference Include="CSharpDiscordWebhookAsync" Version="1.0.2" />
+  </ItemGroup>
 </Project>

@@ -9,6 +9,7 @@
     <ProjectGuid>{1FAE429F-85FB-46DB-A88B-484254D76CB5}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
     <PackageReference Include="protobuf-net.Grpc" Version="1.1.1" />
   </ItemGroup>
 </Project>

@@ -6,16 +6,13 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <SelfContained>false</SelfContained>
     <DebugType>embedded</DebugType>
-    <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
+    <PublishDir Condition="'$(RuntimeIdentifier)' == 'linux-x64'">..\out-linux-x64\plugins\$(MSBuildProjectName)\</PublishDir>
+    <PublishDir Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">..\out-linux-arm64\plugins\$(MSBuildProjectName)\</PublishDir>
+    <PublishDir Condition="'$(RuntimeIdentifier)' == 'win-x64'">..\out-win-x64\plugins\$(MSBuildProjectName)\</PublishDir>
     <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
-    <ProjectGuid>{FC1187D1-4A8B-4860-9A01-DEC79C2036AD}</ProjectGuid>
+    <ProjectGuid>{E52F52AE-4501-452E-9797-A104B2AF0888}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
     <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
@@ -24,6 +21,8 @@
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
-    <PackageReference Include="CSharpDiscordWebhookAsync" Version="1.0.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
   </ItemGroup>
 </Project>

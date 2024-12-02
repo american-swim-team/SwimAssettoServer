@@ -261,12 +261,7 @@ public partial class ACServerConfiguration
     }
 
     private void ApplyConfigurationFixes()
-    {
-        if (Server.MaxClients == 0)
-        {
-            Server.MaxClients = EntryList.Cars.Count;
-        }
-        
+    {        
         if (Extra is { EnableAi: true, AiParams.AutoAssignTrafficCars: true })
         {
             foreach (var entry in EntryList.Cars)
