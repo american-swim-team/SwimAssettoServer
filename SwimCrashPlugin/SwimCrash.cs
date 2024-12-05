@@ -85,6 +85,10 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
                     // Send no collision event
                     state.MonitorGrip = false;
                     CarStates[e.Client.Guid] = state;
+                    _entryCarManager.BroadcastPacket(new ResetCarPacket
+                    {
+                        Target = e.Client.SessionId
+                    });
                     e.TryResetPosition();
                     Log.Debug("Reset {client} due to spinning", e.Client.Name);
                 }

@@ -79,24 +79,6 @@ local teleportCarEvent = ac.OnlineEvent({
     physics.setCarVelocity(0, message.velocity)
 end)
 
-local collisionUpdateEvent = ac.OnlineEvent({
-    ac.StructItem.key("AS_CollisionUpdate"),
-    enabled = ac.StructItem.boolean(),
-    target = ac.StructItem.byte()
-}, function (sender, message)
-    ac.debug("collision_update_index", sender.index)
-    ac.debug("collision_update_enabled", message.enabled)
-
-    physics.disableCarCollisions(0, not message.enabled)
-    if sender.index == 0 then
-        for i, c in ac.iterateCars.ordered() do
-            physics.disableCarCollisions(i, not message.enabled)
-        end
-    else
-        physics.disableCarCollisions(sender.index, not message.enabled)
-    end
-end)
-
 apiKeyEvent({ key = "" })
 
 local logoSize = vec2(68, 42)
