@@ -2,10 +2,11 @@ using AssettoServer.Server.Plugin;
 using AssettoServer.Server;
 using AssettoServer.Shared.Network.Packets.Incoming;
 using AssettoServer.Network.ClientMessages;
-using System.Numerics;
 using AssettoServer.Network.Tcp;
+using System.Numerics;
 using Serilog;
 using Microsoft.Extensions.Hosting;
+using System.Reflection;
 
 namespace SwimCrashPlugin;
 
@@ -18,11 +19,22 @@ public class noCollision : OnlineEvent<noCollision>
 
 public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
 {
+    private readonly SwimCrashConfiguration config;
     private readonly SessionManager _sessionManager;
     private readonly EntryCarManager _entryCarManager;
     private Dictionary<ulong, CarState> CarStates = new Dictionary<ulong, CarState>();
-    public SwimCrashHandler(SessionManager sessionManager, EntryCarManager entryCarManager)
+    public SwimCrashHandler(SwimCrashConfiguration configuration, SessionManager sessionManager, EntryCarManager entryCarManager, CSPServerScriptProvider scriptProvider)
     {
+        Log.Information("------------------------------------");
+        Log.Information("SwimCrashPlugin");
+        Log.Information("By Romedius");
+        Log.Information("------------------------------------");
+
+        using var streamReader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("SwimCrashPlugin.lua.swimcrash.lua")!);
+        scriptProvider.AddScript(streamReader.ReadToEnd(), "swimcrash.lua");
+        
+        config = configuration;
+
         _sessionManager = sessionManager;
         _entryCarManager = entryCarManager;
         _entryCarManager.ClientConnected += OnConnected;
@@ -31,7 +43,7 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
 
     private void OnConnected(ACTcpClient sender, EventArgs e)
     {
-        Log.Debug("Client registered for collision management");
+        Log.Verbose("Client registered for collision management");
         sender.Collision += OnCollision;
         sender.EntryCar.PositionUpdateReceived += OnPositionUpdateReceived;
         CarStates[sender.Guid] = new CarState();
@@ -39,28 +51,38 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
 
     private void OnDisconnected(ACTcpClient sender, EventArgs e)
     {
-        Log.Debug("Client unregistered for collision management");
+        Log.Verbose("Client unregistered for collision management");
         sender.Collision -= OnCollision;
         sender.EntryCar.PositionUpdateReceived -= OnPositionUpdateReceived;
         CarStates.Remove(sender.Guid);
     }
 
-    private void OnCollision(ACTcpClient sender, CollisionEventArgs e) {
-        Log.Debug("Collision detected");
-        if (e.Speed < 30) {
+    private void OnCollision(ACTcpClient? sender, CollisionEventArgs e) {
+        if (e.Speed < config.SpeedThreshold) {
             return;
         }
 
-        var state = CarStates[sender.Guid];
-
-        state.MonitorGrip = true;
-        state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
-        CarStates[sender.Guid] = state;
+        if (sender == null) {
+            if (e.TargetCar == null || e.TargetCar.Client == null) {
+                Log.Verbose("No client found. Ignoring collision. No TargetCar and no sender.");
+                return;
+            } else {
+                var state = CarStates[e.TargetCar.Client.Guid];
+                state.MonitorGrip = true;
+                state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
+                CarStates[e.TargetCar.Client.Guid] = state;
+            }
+        } else {
+            var state = CarStates[sender.Guid];
+            state.MonitorGrip = true;
+            state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
+            CarStates[sender.Guid] = state;
+        }
     }
 
     private void OnPositionUpdateReceived(EntryCar e, in PositionUpdateIn positionUpdate) {
         if (e.Client == null) {
-            Log.Debug("No client found. Ignoring position update.");
+            Log.Verbose("No client found. Ignoring position update.");
             return;
         }
         
@@ -70,7 +92,7 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
             return;
         }
 
-        if (_sessionManager.ServerTimeMilliseconds - state.LastCollisionTime > 3000) {
+        if (_sessionManager.ServerTimeMilliseconds - state.LastCollisionTime > config.MonitorTime) {
             state.MonitorGrip = false;
             CarStates[e.Client.Guid] = state;
             return;
@@ -90,53 +112,30 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
                         Target = e.Client.SessionId
                     });
                     e.TryResetPosition();
-                    Log.Debug("Reset {client} due to spinning", e.Client.Name);
+                    Log.Verbose("Reset {client} due to spinning", e.Client.Name);
                 }
             }
         }
 
-        state.FirstUpdate = positionUpdate;
         CarStates[e.Client.Guid] = state;
     }
 
     private bool IsCarOutOfControl(PositionUpdateIn current, PositionUpdateIn previous)
-{
-    Vector3 forwardDirection = GetForwardDirection(current.Rotation);
-
-    Vector3 lateralVelocity = current.Velocity - Vector3.Dot(current.Velocity, forwardDirection) * forwardDirection;
-    float lateralVelocityMagnitude = lateralVelocity.Length();
-
-    float rotationInstability = Math.Abs(current.Rotation.X);
-
-    int tyreSpeedDifference = Math.Abs(current.TyreAngularSpeedFL - current.TyreAngularSpeedFR) +
-                              Math.Abs(current.TyreAngularSpeedRL - current.TyreAngularSpeedRR);
-
-    bool isSpinning = rotationInstability > 1.0f;
-    bool isSliding = lateralVelocityMagnitude > 20.0f && current.Gas > 0.5f;
-    bool tyreSlipDetected = tyreSpeedDifference > 10;
-
-    bool outOfControl = (isSpinning && isSliding) || tyreSlipDetected;
-
-    Log.Debug("Out of Control Check: {rotationInstability}, {lateralVelocity}, {tyreSlip}, {isSpinning}, {isSliding}, {tyreSlipDetected}",
-        rotationInstability, lateralVelocityMagnitude, tyreSpeedDifference, isSpinning, isSliding, tyreSlipDetected);
-
-    return outOfControl;
-}
-
-
-    private static Vector3 GetForwardDirection(Vector3 rotation)
     {
-        // Assuming rotation.Y is the yaw angle in radians
-        float yaw = rotation.Y;
+        Vector3 movementDirection = Vector3.Subtract(previous.Rotation, current.Rotation);
 
-        return new Vector3(MathF.Cos(yaw), 0.0f, MathF.Sin(yaw));
-    }
+        // Check if spinning
+        Log.Verbose("Movement Direction: {movementDirection}",  MathF.Abs(movementDirection.X));
+        bool inSpin = MathF.Abs(movementDirection.X) > config.SpinThreshold;
 
-    private static float Clamp(float value, float min, float max)
-    {
-        if (value < min) return min;
-        if (value > max) return max;
-        return value;
+        // Check if flipping
+        Log.Verbose("Movement Direction: {movementDirection}",  MathF.Abs(movementDirection.Y));
+        bool inFlip = MathF.Abs(movementDirection.Y) > config.FlipThreshold;
+
+        bool outOfControl = inSpin || inFlip;
+        Log.Verbose("Out of Control Check: {movementDirection}, {inSpin}, {inFlip}", movementDirection, inSpin, inFlip);
+
+        return outOfControl;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)

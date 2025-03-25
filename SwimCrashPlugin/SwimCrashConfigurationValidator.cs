@@ -10,6 +10,9 @@ public class SwimCrashConfigurationValidator : AbstractValidator<SwimCrashConfig
 {
     public SwimCrashConfigurationValidator()
     {
-        RuleFor(x => x.SpinThreshold).NotEmpty().WithMessage("Server must be set");
+        RuleFor(x => x.SpinThreshold).NotEmpty().WithMessage("SpinThreshold must be set");
+        RuleFor(x => x.SpeedThreshold).NotEmpty().WithMessage("SpeedThreshold must be set");
+        RuleFor(x => x.FlipThreshold).NotEmpty().WithMessage("FlipThreshold must be set");
+        RuleFor(x => x.MonitorTime).NotEmpty().WithMessage("MonitorTime must be set");
     }
 }

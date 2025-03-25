@@ -25,4 +25,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
   </ItemGroup>
+  <ItemGroup>
+    <None Remove="lua\swimcrash.lua" />
+    <EmbeddedResource Include="lua\swimcrash.lua" />
+  </ItemGroup>
 </Project>
