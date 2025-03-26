@@ -12,9 +12,9 @@ namespace AssettoServer.Server.Configuration.Kunos;
 public class ServerConfiguration
 {
 
-    private static readonly ushort DefaultUdpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_UDP_PORT"), out var udpPort) ? udpPort : (ushort)9600;
-    private static readonly ushort DefaultTcpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_TCP_PORT"), out var tcpPort) ? tcpPort : (ushort)9600;
-    private static readonly ushort DefaultHttpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_HTTP_PORT"), out var httpPort) ? httpPort : (ushort)8081;
+    public static readonly ushort DefaultUdpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_UDP_PORT"), out var udpPort) ? udpPort : (ushort)9600;
+    public static readonly ushort DefaultTcpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_TCP_PORT"), out var tcpPort) ? tcpPort : (ushort)9600;
+    public static readonly ushort DefaultHttpPort = ushort.TryParse(Environment.GetEnvironmentVariable("AS_HTTP_PORT"), out var httpPort) ? httpPort : (ushort)8081;
 
     [IniField("SERVER", "NAME")] public string Name { get; set; } = "AssettoServer";
     [IniField("SERVER", "PASSWORD")] public string? Password { get; set; }
@@ -23,6 +23,9 @@ public class ServerConfiguration
     [IniField("SERVER", "UDP_PORT")] public ushort UdpPort { get; init; } = DefaultUdpPort;
     [IniField("SERVER", "TCP_PORT")] public ushort TcpPort { get; init; } = DefaultTcpPort;
     [IniField("SERVER", "HTTP_PORT")] public ushort HttpPort { get; init; } = DefaultHttpPort;
+    [IniField("SERVER", "REVERSE_HTTP_PORT")] public ushort ReverseHttpPort { get; init; } = ushort.TryParse(Environment.GetEnvironmentVariable("AS_REVERSE_HTTP_PORT"), out var reverseHttpPort) ? reverseHttpPort : DefaultHttpPort;
+    [IniField("SERVER", "REVERSE_TCP_PORT")] public ushort ReverseTcpPort { get; init; } = ushort.TryParse(Environment.GetEnvironmentVariable("AS_REVERSE_TCP_PORT"), out var reverseTcpPort) ? reverseTcpPort : DefaultTcpPort;
+    [IniField("SERVER", "REVERSE_UDP_PORT")] public ushort ReverseUdpPort { get; init; } = ushort.TryParse(Environment.GetEnvironmentVariable("AS_REVERSE_UDP_PORT"), out var reverseUdpPort) ? reverseUdpPort : DefaultUdpPort;
     [IniField("SERVER", "CLIENT_SEND_INTERVAL_HZ")] public byte RefreshRateHz { get; init; } = 20;
     [IniField("SERVER", "TRACK")] public string Track { get; internal set; } = "";
     [IniField("SERVER", "CONFIG_TRACK")] public string TrackConfig { get; init; } = "";

@@ -64,7 +64,7 @@ public class HttpController : ControllerBase
             Cars = _cache.Cars,
             Clients = _entryCarManager.ConnectedCars.Count,
             Country = _cache.Country,
-            CPort = _configuration.Server.HttpPort,
+            CPort = _configuration.Server.ReverseHttpPort,
             Durations = _cache.Durations,
             Extra = _configuration.Server.HasExtraLap,
             Inverted = _configuration.Server.InvertedGridPositions,
@@ -75,13 +75,13 @@ public class HttpController : ControllerBase
             Pickup = true,
             Pit = _configuration.Server.PitWindowEnd > 0,
             Session = (int)_sessionManager.CurrentSession.Configuration.Type,
-            Port = _configuration.Server.UdpPort,
+            Port = _configuration.Server.ReverseUdpPort,
             SessionTypes = _cache.SessionTypes,
             Timed = _configuration.Sessions.All(s => s.IsTimedRace),
             TimeLeft = _sessionManager.CurrentSession.TimeLeftMilliseconds / 1000,
             TimeOfDay = (int)WeatherUtils.SunAngleFromTicks(_weatherManager.CurrentDateTime.TimeOfDay.TickOfDay),
             Timestamp = 0,
-            TPort = _configuration.Server.TcpPort,
+            TPort = _configuration.Server.ReverseTcpPort,
             Track = _cache.Track,
             PoweredBy = _cache.PoweredBy
         };
@@ -120,13 +120,13 @@ public class HttpController : ControllerBase
     {
         bool guidValid = ulong.TryParse(guid, out ulong ulongGuid);
         bool isAdmin = guidValid && await _adminService.IsAdminAsync(ulongGuid);
-        
+
         DetailResponse responseObj = new DetailResponse
         {
             Cars = _cache.Cars,
             Clients = _entryCarManager.ConnectedCars.Count,
             Country = _cache.Country,
-            CPort = _configuration.Server.HttpPort,
+            CPort = _configuration.Server.ReverseHttpPort,
             Durations = _cache.Durations,
             Extra = _configuration.Server.HasExtraLap,
             Inverted = _configuration.Server.InvertedGridPositions,
@@ -137,13 +137,13 @@ public class HttpController : ControllerBase
             Pickup = true,
             Pit = _configuration.Server.PitWindowEnd > 0,
             Session = (int)_sessionManager.CurrentSession.Configuration.Type,
-            Port = _configuration.Server.UdpPort,
+            Port = _configuration.Server.ReverseUdpPort,
             SessionTypes = _cache.SessionTypes,
             Timed = _configuration.Sessions.All(s => s.IsTimedRace),
             TimeLeft = _sessionManager.CurrentSession.TimeLeftMilliseconds / 1000,
             TimeOfDay = (int)WeatherUtils.SunAngleFromTicks(_weatherManager.CurrentDateTime.TimeOfDay.TickOfDay),
             Timestamp = 0,
-            TPort = _configuration.Server.TcpPort,
+            TPort = _configuration.Server.ReverseTcpPort,
             Track = _cache.Track,
             LoadingImageUrl = _configuration.Extra.LoadingImageUrls is { Count: > 0 }
                 ? _configuration.Extra.LoadingImageUrls[Random.Shared.Next(0, _configuration.Extra.LoadingImageUrls.Count)]
@@ -168,7 +168,7 @@ public class HttpController : ControllerBase
             City = _geoParamsManager.GeoParams.City,
             Frequency = _configuration.Server.RefreshRateHz,
             Assists = _cache.Assists,
-            WrappedPort = _configuration.Server.HttpPort,
+            WrappedPort = _configuration.Server.ReverseHttpPort,
             AmbientTemperature = _weatherManager.CurrentWeather.TemperatureAmbient,
             RoadTemperature = _weatherManager.CurrentWeather.TemperatureRoad,
             CurrentWeatherId = _weatherManager.CurrentWeather.Type.WeatherFxType == WeatherFxType.None
@@ -182,7 +182,7 @@ public class HttpController : ControllerBase
             PoweredBy = _cache.PoweredBy,
             Extensions = _cache.Extensions
         };
-        
+
         return responseObj;
     }
 

@@ -105,7 +105,7 @@ public class KunosLobbyRegistration : CriticalBackgroundService
         var queryParams = HttpUtility.ParseQueryString(builder.Query);
 
         string cars = string.Join(',', _entryCarManager.EntryCars.Select(c => c.Model).Distinct());
-        
+
         // Truncate cars list, Lobby will return 404 when the URL is too long
         const int maxLen = 1200;
         if (cars.Length > maxLen)
@@ -114,10 +114,10 @@ public class KunosLobbyRegistration : CriticalBackgroundService
             int last = cars.LastIndexOf(',');
             cars = cars[..last];
         }
-        
-        queryParams["name"] = cfg.Name + (_configuration.Extra.EnableServerDetails ? $" ℹ{_configuration.Server.HttpPort}" : "");
-        queryParams["port"] = cfg.UdpPort.ToString();
-        queryParams["tcp_port"] = cfg.TcpPort.ToString();
+
+        queryParams["name"] = cfg.Name + (_configuration.Extra.EnableServerDetails ? $" ℹ{_configuration.Server.ReverseHttpPort}" : "");
+        queryParams["port"] = cfg.ReverseUdpPort.ToString();
+        queryParams["tcp_port"] = cfg.ReverseTcpPort.ToString();
         queryParams["max_clients"] = cfg.MaxClients.ToString();
         queryParams["track"] = _configuration.FullTrackName;
         queryParams["cars"] = cars;
@@ -141,16 +141,16 @@ public class KunosLobbyRegistration : CriticalBackgroundService
 
         Log.Information("Registering server to lobby...");
         HttpResponseMessage response = await _httpClient.GetAsync(builder.ToString(), token);
-        
+
         response.EnsureSuccessStatusCode();
-        
+
         string body = await response.Content.ReadAsStringAsync(token);
 
         if (!body.StartsWith("OK"))
         {
             throw new KunosLobbyException(body);
         }
-        
+
         Log.Information("Lobby registration successful");
     }
 
@@ -172,24 +172,24 @@ public class KunosLobbyRegistration : CriticalBackgroundService
     {
         var builder = new UriBuilder(url);
         var queryParams = HttpUtility.ParseQueryString(builder.Query);
-        
+
         queryParams["session"] = ((int)_sessionManager.CurrentSession.Configuration.Type).ToString();
         queryParams["timeleft"] = (_sessionManager.CurrentSession.TimeLeftMilliseconds / 1000).ToString();
-        queryParams["port"] = _configuration.Server.UdpPort.ToString();
+        queryParams["port"] = _configuration.Server.ReverseUdpPort.ToString();
         queryParams["clients"] = _entryCarManager.ConnectedCars.Count.ToString();
         queryParams["track"] = _configuration.FullTrackName;
         queryParams["pickup"] = "1";
         builder.Query = queryParams.ToString();
-        
+
         HttpResponseMessage response = await _httpClient.GetAsync(builder.ToString(), token);
 
         response.EnsureSuccessStatusCode();
-        
+
         string body = await response.Content.ReadAsStringAsync(token);
 
         if (!body.StartsWith("OK"))
         {
-            if (body is "ERROR - RESTART YOUR SERVER TO REGISTER WITH THE LOBBY" 
+            if (body is "ERROR - RESTART YOUR SERVER TO REGISTER WITH THE LOBBY"
                 or "ERROR,SERVER NOT REGISTERED WITH LOBBY - PLEASE RESTART")
             {
                 await RegisterToLobbyWithRetryAsync(token);

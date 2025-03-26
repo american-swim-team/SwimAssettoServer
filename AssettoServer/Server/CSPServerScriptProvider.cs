@@ -34,7 +34,7 @@ public class CSPServerScriptProvider
         {
             _debugUserGroup = userGroupManager.Resolve(configuration.Extra.DebugScriptUserGroup);
         }
-        
+
         extraOptions.CSPServerExtraOptionsSending += OnExtraOptionsSending;
     }
 
@@ -61,14 +61,14 @@ public class CSPServerScriptProvider
 
     public virtual void AddScriptFile(string path, string? debugFilename = null, Dictionary<string, object>? configuration = null)
         => AddScriptInternal(() => new PhysicalFileResult(path, "text/x-lua") { FileDownloadName = debugFilename }, debugFilename, configuration);
-    
+
     public virtual void AddScript(string script, string? debugFilename = null, Dictionary<string, object>? configuration = null)
     {
         var bytes = Encoding.UTF8.GetBytes(script);
         AddScript(bytes, debugFilename, configuration);
     }
 
-    public virtual void AddScript(byte[] script, string? debugFilename = null, Dictionary<string, object>? configuration = null) 
+    public virtual void AddScript(byte[] script, string? debugFilename = null, Dictionary<string, object>? configuration = null)
         => AddScriptInternal(() => new FileContentResult(script, "text/x-lua") { FileDownloadName = debugFilename }, debugFilename, configuration);
 
     private string PrepareScriptSection(string address, string? debugFilename = null, Dictionary<string, object>? configuration = null)
@@ -76,7 +76,7 @@ public class CSPServerScriptProvider
         var data = new IniData();
         var scriptSection = data[$"SCRIPT_{10 + Scripts.Count}-{debugFilename}"];
         scriptSection["SCRIPT"] = address;
-        
+
         if (configuration != null)
         {
             foreach ((string key, object value) in configuration)
@@ -100,7 +100,7 @@ public class CSPServerScriptProvider
         {
             section = PrepareScriptSection($"'http://{{ServerIP}}:{{ServerHTTPPort}}/api/scripts/{Scripts.Count}'", debugFilename, configuration);
         }
-        
+
         _serverScripts += $"\r\n{section}\r\n";
 
         if (!string.IsNullOrEmpty(debugFilename))

@@ -45,5 +45,5 @@ RUN apt-get update && \
 ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
-RUN poetry install --no-dev --no-root
+RUN poetry install --no-root
 ENTRYPOINT ["poetry", "run", "python", "/app/setup.py"]

@@ -32,10 +32,10 @@ public class HttpInfoCache : CriticalBackgroundService, IAssettoServerAutostart
     {
         _entryCarManager = entryCarManager;
         _geoParamsManager = geoParamsManager;
-        
+
         Durations = configuration.Sessions.Select(c => c.IsTimedRace ? c.Time * 60 : c.Laps).ToReadOnlyList();
         SessionTypes = configuration.Sessions.Select(s => (int)s.Type).ToReadOnlyList();
-        ServerName = configuration.Server.Name + (configuration.Extra.EnableServerDetails ? " ℹ" + configuration.Server.HttpPort : "");
+        ServerName = configuration.Server.Name + (configuration.Extra.EnableServerDetails ? " ℹ" + configuration.Server.ReverseHttpPort : "");
         Track = configuration.Server.Track + (string.IsNullOrEmpty(configuration.Server.TrackConfig) ? null : "-" + configuration.Server.TrackConfig);
         PoweredBy = $"AssettoServer {configuration.ServerVersion}";
         Assists = new DetailResponseAssists
