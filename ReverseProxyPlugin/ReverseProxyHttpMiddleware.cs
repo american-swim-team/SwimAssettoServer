@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ReverseProxyPlugin;
 
@@ -14,6 +15,8 @@ public class ReverseProxyMiddleware
     {
         _config = config;
         _next = next;
+
+        Log.Information("ReverseProxy HTTP middleware initialized!");
     }
 
     public async Task InvokeAsync(HttpContext context)

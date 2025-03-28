@@ -15,7 +15,7 @@ public class ReverseProxyModule : AssettoServerModule<ReverseProxyConfiguration>
             .As<IGeoParamsProvider>()
             .SingleInstance();
 
-        builder.RegisterType<ReverseProxyHandshakeHandler>()
+        builder.RegisterType<ReverseProxyTcpHandler>()
            .AsSelf()
            .As<IAssettoServerAutostart>()
            .SingleInstance();

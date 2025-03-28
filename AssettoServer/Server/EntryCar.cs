@@ -317,17 +317,12 @@ public partial class EntryCar : IEntryCar<ACTcpClient>
         
         var position = splinePoint.Position;
         var direction = - _spline.Operations.GetForwardVector(splinePoint.NextId);
-        
-        Client?.SendCollisionUpdatePacket(false);
-        
+                
         _ = Task.Run(async () =>
         {
             await Task.Delay(500);
         
-            Client?.SendTeleportCarPacket(position, direction);
-            await Task.Delay(10000);
-        
-            Client?.SendCollisionUpdatePacket(true);
+            Client?.SendTeleportCarPacket(position, direction);        
         });
     
         Logger.Information("Reset position for {Player} ({SessionId})",Client?.Name, Client?.SessionId);

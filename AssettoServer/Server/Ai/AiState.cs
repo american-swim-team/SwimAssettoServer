@@ -235,7 +235,6 @@ public class AiState
                 {
                     _indicator = 0;
                     _junctionPassed = false;
-                    _junctionUnsafe = false;
                     _endIndicatorDistance = 0;
                 }
             }
@@ -398,7 +397,7 @@ public class AiState
     {
         var ignorePlayer = ShouldIgnorePlayerObstacles();
         float boxWidth = _configuration.Extra.AiParams.LaneWidthMeters + 1;
-        float boxLength = _configuration.Extra.AiParams.MinAiSafetyDistanceMeters + 2;
+        float boxLength = _configuration.Extra.AiParams.MaxAiSafetyDistanceMeters + 2;
         float timeHorizon = 3.0f;
         bool isLeft = (indicator & CarStatusFlags.IndicateLeft) != 0;
 
@@ -414,16 +413,10 @@ public class AiState
         float back = boxCenter.Z - boxLength;
 
         foreach (var car in _entryCarManager.EntryCars) {
-            if (Vector3.Distance(car.Status.Position, Status.Position) > boxLength * 3) {
-                continue;
-            }
-
-            Log.Verbose("AI {AI} checking car {Car}", EntryCar.SessionId, car.SessionId);
 
             if (!ignorePlayer && car.Client?.HasSentFirstUpdate == true) {
                 Vector3 futurePosition = car.Status.Position + car.Status.Velocity * timeHorizon;
                 if (futurePosition.X > left && futurePosition.X < right && futurePosition.Z > back && futurePosition.Z < front) {
-                    Log.Verbose("AI {AI} blocked by player car {Player}", EntryCar.SessionId, car.SessionId);
                     return false;
                 }
             } else if (car.AiControlled) {
@@ -433,13 +426,11 @@ public class AiState
                     }
                     Vector3 futurePosition = aiState.Status.Position + aiState.Status.Velocity * timeHorizon;
                     if (futurePosition.X > left && futurePosition.X < right && futurePosition.Z > back && futurePosition.Z < front) {
-                        Log.Verbose("AI {AI} blocked by AI car {AI}", EntryCar.SessionId, aiState.EntryCar.SessionId);
                         return false;
                     }
                 }
             }
         }
-        Log.Verbose("AI {SessionId} can use junction with indicator {Indicator}", EntryCar.SessionId, indicator);
         return true;
     }
 

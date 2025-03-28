@@ -1,5 +1,6 @@
 using AssettoServer.Server.GeoParams;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ReverseProxyPlugin;
 
@@ -12,6 +13,8 @@ public class ReverseProxyGeoParamsProvider : IGeoParamsProvider {
     public ReverseProxyGeoParamsProvider(HttpClient httpClient, ReverseProxyConfiguration config) {
         _httpClient = httpClient;
         _config = config;
+
+        Log.Information("ReverseProxy GeoParamsProvider initialized!");
     }
 
     public async Task<GeoParams?> GetAsync()
