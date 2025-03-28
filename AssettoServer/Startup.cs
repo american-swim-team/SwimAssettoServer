@@ -188,15 +188,15 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
+        foreach (var plugin in _loader.LoadedPlugins)
+        {
+            plugin.Instance.Configure(app, env);
+        }
+
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapMetrics();
             endpoints.MapControllers();
         });
-        
-        foreach (var plugin in _loader.LoadedPlugins)
-        {
-            plugin.Instance.Configure(app, env);
-        }
     }
 }

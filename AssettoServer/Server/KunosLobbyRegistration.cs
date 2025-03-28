@@ -115,9 +115,9 @@ public class KunosLobbyRegistration : CriticalBackgroundService
             cars = cars[..last];
         }
 
-        queryParams["name"] = cfg.Name + (_configuration.Extra.EnableServerDetails ? $" ℹ{_configuration.Server.ReverseHttpPort}" : "");
-        queryParams["port"] = cfg.ReverseUdpPort.ToString();
-        queryParams["tcp_port"] = cfg.ReverseTcpPort.ToString();
+        queryParams["name"] = cfg.Name + (_configuration.Extra.EnableServerDetails ? $" ℹ{_configuration.Server.HttpPort}" : "");
+        queryParams["port"] = cfg.UdpPort.ToString();
+        queryParams["tcp_port"] = cfg.TcpPort.ToString();
         queryParams["max_clients"] = cfg.MaxClients.ToString();
         queryParams["track"] = _configuration.FullTrackName;
         queryParams["cars"] = cars;
@@ -175,7 +175,7 @@ public class KunosLobbyRegistration : CriticalBackgroundService
 
         queryParams["session"] = ((int)_sessionManager.CurrentSession.Configuration.Type).ToString();
         queryParams["timeleft"] = (_sessionManager.CurrentSession.TimeLeftMilliseconds / 1000).ToString();
-        queryParams["port"] = _configuration.Server.ReverseUdpPort.ToString();
+        queryParams["port"] = _configuration.Server.UdpPort.ToString();
         queryParams["clients"] = _entryCarManager.ConnectedCars.Count.ToString();
         queryParams["track"] = _configuration.FullTrackName;
         queryParams["pickup"] = "1";

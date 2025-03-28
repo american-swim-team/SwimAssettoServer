@@ -1,30 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <EnableDynamicLoading>true</EnableDynamicLoading>
-        <SelfContained>false</SelfContained>
-        <DebugType>embedded</DebugType>
-        <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
-        <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-    </PropertyGroup>
-
-    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-        <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
-          <Private>false</Private>
-          <ExcludeAssets>runtime</ExcludeAssets>
-      </ProjectReference>
-      <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
-        <Private>false</Private>
-        <ExcludeAssets>runtime</ExcludeAssets>
-      </ProjectReference>
-    </ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <SelfContained>false</SelfContained>
+    <DebugType>embedded</DebugType>
+    <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
+    <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
+    <ProjectGuid>{9127E231-FC7F-43CE-BE17-7A8550033DC9}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AssettoServer.Shared\AssettoServer.Shared.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
 </Project>
