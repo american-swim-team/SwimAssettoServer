@@ -370,3 +370,6 @@ out-win-*
 
 docker/here
 docker/s3cfg
+
+# Local server runtime directory
+server/
