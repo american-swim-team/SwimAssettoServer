@@ -36,6 +36,7 @@ public class ACServer : CriticalBackgroundService
     private readonly List<IHostedService> _autostartServices;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ITrackParamsProvider _trackParamsProvider;
+    private readonly Gauge _connectedPlayersGauge = Metrics.CreateGauge("assettoserver_connectedplayers", "Number of connected player clients");
 
     /// <summary>
     /// Fires on each server tick in the main loop. Don't do resource intensive / long running stuff in here!
@@ -200,6 +201,7 @@ public class ACServer : CriticalBackgroundService
                 using (updateLoopTimer.NewTimer())
                 {
                     Update?.Invoke(this, EventArgs.Empty);
+                    _connectedPlayersGauge.Set(_entryCarManager.ConnectedCars.Count);
 
                     for (int i = 0; i < _entryCarManager.EntryCars.Length; i++)
                     {
