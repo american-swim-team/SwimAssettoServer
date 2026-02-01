@@ -7,6 +7,7 @@ using System.Numerics;
 using Serilog;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
+using TrafficAiPlugin.Shared;
 
 namespace SwimCrashPlugin;
 
@@ -17,13 +18,14 @@ public class noCollision : OnlineEvent<noCollision>
     public int EntryCar;
 }
 
-public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
+public class SwimCrashHandler : BackgroundService
 {
     private readonly SwimCrashConfiguration config;
     private readonly SessionManager _sessionManager;
     private readonly EntryCarManager _entryCarManager;
+    private readonly ITrafficAi? _trafficAi;
     private Dictionary<ulong, CarState> CarStates = new Dictionary<ulong, CarState>();
-    public SwimCrashHandler(SwimCrashConfiguration configuration, SessionManager sessionManager, EntryCarManager entryCarManager, CSPServerScriptProvider scriptProvider)
+    public SwimCrashHandler(SwimCrashConfiguration configuration, SessionManager sessionManager, EntryCarManager entryCarManager, CSPServerScriptProvider scriptProvider, ITrafficAi? trafficAi = null)
     {
         Log.Information("------------------------------------");
         Log.Information("SwimCrashPlugin");
@@ -37,6 +39,7 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
 
         _sessionManager = sessionManager;
         _entryCarManager = entryCarManager;
+        _trafficAi = trafficAi;
         _entryCarManager.ClientConnected += OnConnected;
         _entryCarManager.ClientDisconnected += OnDisconnected;
     }
@@ -111,7 +114,7 @@ public class SwimCrashHandler : BackgroundService, IAssettoServerAutostart
                     {
                         Target = e.Client.SessionId
                     });
-                    e.TryResetPosition();
+                    _trafficAi?.GetAiCarBySessionId(e.SessionId).TryResetPosition();
                     Log.Verbose("Reset {client} due to spinning", e.Client.Name);
                 }
             }

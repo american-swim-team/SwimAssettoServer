@@ -18,7 +18,7 @@ public class ReverseProxyModule : AssettoServerModule<ReverseProxyConfiguration>
 
         builder.RegisterType<ReverseProxyTcpHandler>()
            .AsSelf()
-           .As<IAssettoServerAutostart>()
+           .As<Microsoft.Extensions.Hosting.IHostedService>()
            .SingleInstance();
 
         // Override HttpClient to use custom handler for lobby requests

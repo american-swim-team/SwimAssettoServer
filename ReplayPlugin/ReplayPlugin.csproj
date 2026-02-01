@@ -23,6 +23,9 @@
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
+    <ProjectReference Include="..\TrafficAiPlugin.Shared\TrafficAiPlugin.Shared.csproj">
+      <PrivateAssets>all</PrivateAssets>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <None Remove="lua\replay.lua" />

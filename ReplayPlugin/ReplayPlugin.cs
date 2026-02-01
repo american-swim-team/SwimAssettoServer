@@ -9,6 +9,7 @@ using Prometheus;
 using ReplayPlugin.Data;
 using ReplayPlugin.Packets;
 using Serilog;
+using TrafficAiPlugin.Shared;
 
 namespace ReplayPlugin;
 
@@ -22,7 +23,8 @@ public class ReplayPlugin : IHostedService
     private readonly Summary _onUpdateTimer;
     private readonly EntryCarExtraDataManager _extraData;
     private readonly ReplayMetadataProvider _metadata;
-    
+    private readonly ITrafficAi? _trafficAi;
+
     public ReplayPlugin(EntryCarManager entryCarManager,
         WeatherManager weather,
         SessionManager session,
@@ -32,7 +34,8 @@ public class ReplayPlugin : IHostedService
         CSPClientMessageTypeManager cspClientMessageTypeManager,
         EntryCarExtraDataManager extraData,
         ReplayMetadataProvider metadata,
-        ACServer server)
+        ACServer server,
+        ITrafficAi? trafficAi = null)
     {
         _entryCarManager = entryCarManager;
         _weather = weather;
@@ -41,10 +44,11 @@ public class ReplayPlugin : IHostedService
         _configuration = configuration;
         _extraData = extraData;
         _metadata = metadata;
+        _trafficAi = trafficAi;
 
         _onUpdateTimer = Metrics.CreateSummary("assettoserver_replayplugin_onupdate", "ReplayPlugin.OnUpdate Duration", MetricDefaults.DefaultQuantiles);
         server.Update += Update;
-        
+
         cspClientMessageTypeManager.RegisterOnlineEvent<UploadDataPacket>(OnUploadData);
         scriptProvider.AddScript(Assembly.GetExecutingAssembly().GetManifestResourceStream("ReplayPlugin.lua.replay.lua")!, "replay.lua");
     }
@@ -78,16 +82,19 @@ public class ReplayPlugin : IHostedService
                 }
                 else if (entryCar.AiControlled)
                 {
-                    for (int i = 0; i < entryCar.LastSeenAiState.Length; i++)
+                    if (_trafficAi == null) continue;
+
+                    var entryCarAi = _trafficAi.GetAiCarBySessionId(entryCar.SessionId);
+                    for (int i = 0; i < entryCarAi.LastSeenAiState.Length; i++)
                     {
-                        var aiState = entryCar.LastSeenAiState[i];
+                        var aiState = entryCarAi.LastSeenAiState[i];
                         if (aiState == null) continue;
 
                         if (!_state.AiStateMapping.TryGetValue(aiState, out var aiStateId))
                         {
                             aiStateId = (short)_state.AiCars.Count;
                             _state.AiStateMapping.Add(aiState, aiStateId);
-                            _state.AiCars.Add((aiState.EntryCar.SessionId, aiState.Status));
+                            _state.AiCars.Add((aiState.SessionId, aiState.Status));
                         }
 
                         if (_state.AiFrameMapping.TryGetValue((byte)i, out var aiFrameMappingList))

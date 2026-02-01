@@ -36,9 +36,9 @@ public partial class ACServerConfiguration
     [YamlIgnore] public bool GeneratePluginConfigs { get; }
     [YamlIgnore] public int RandomSeed { get; } = Random.Shared.Next();
     [YamlIgnore] public string? Preset { get; }
-    [YamlIgnore] public DrsZones DrsZones { get; }    
+    [YamlIgnore] public DrsZones DrsZones { get; }
     [YamlIgnore] public CarSetups Setups { get; }
-    
+
     /*
      * Search paths are like this:
      *
@@ -72,10 +72,10 @@ public partial class ACServerConfiguration
         var extraCfgSchemaPath = ConfigurationSchemaGenerator.WriteExtraCfgSchema();
         LoadExtraConfig(locations.ExtraCfgPath, extraCfgSchemaPath);
         ReferenceConfigurationHelper.WriteReferenceConfiguration("extra_cfg.reference.yml",
-            extraCfgSchemaPath, 
-            ACExtraConfiguration.ReferenceConfiguration, 
+            extraCfgSchemaPath,
+            ACExtraConfiguration.ReferenceConfiguration,
             $"AssettoServer {ThisAssembly.AssemblyInformationalVersion}");
-        
+
         var parsedTrackOptions = CSPTrackOptions = CSPTrackOptions.Parse(Server.Track);
         if (Extra.MinimumCSPVersion.HasValue
             && (!CSPTrackOptions.MinimumCSPVersion.HasValue || Extra.MinimumCSPVersion.Value > CSPTrackOptions.MinimumCSPVersion.Value))
@@ -100,7 +100,7 @@ public partial class ACServerConfiguration
 
         FullTrackName = string.IsNullOrEmpty(Server.TrackConfig) ? Server.Track : $"{Server.Track}-{Server.TrackConfig}";
         DrsZones = LoadDrsZones(locations.DrsZonePath(CSPTrackOptions.Track, Server.TrackConfig), Extra.EnableGlobalDrs);
-        
+
         ApplyConfigurationFixes();
 
         var validator = new ACServerConfigurationValidator();
@@ -129,7 +129,7 @@ public partial class ACServerConfiguration
                 config.UdpPort = portOverrides.UdpPort;
                 config.HttpPort = portOverrides.HttpPort;
             }
-            
+
             return config;
         }
         catch (Exception ex)
@@ -159,7 +159,7 @@ public partial class ACServerConfiguration
             throw new ConfigurationParsingException(path, ex);
         }
     }
-    
+
     private CarSetups LoadSetups()
     {
         CarSetups setups = new();
@@ -270,28 +270,12 @@ public partial class ACServerConfiguration
     }
 
     private void ApplyConfigurationFixes()
-    {        
-        if (Extra is { EnableAi: true, AiParams.AutoAssignTrafficCars: true })
+    {
+        if (Server.MaxClients == 0)
         {
-            foreach (var entry in EntryList.Cars)
-            {
-                if (entry.Model.Contains("traffic"))
-                {
-                    entry.AiMode = AiMode.Fixed;
-                }
-            }
+            Server.MaxClients = EntryList.Cars.Count;
         }
 
-        if (Extra.AiParams.AiPerPlayerTargetCount == 0)
-        {
-            Extra.AiParams.AiPerPlayerTargetCount = EntryList.Cars.Count(c => c.AiMode != AiMode.None);
-        }
-
-        if (Extra.AiParams.MaxAiTargetCount == 0)
-        {
-            Extra.AiParams.MaxAiTargetCount = EntryList.Cars.Count(c => c.AiMode != AiMode.Fixed) * Extra.AiParams.AiPerPlayerTargetCount;
-        }
-        
         var filteredServerName = ServerDetailsIdRegex().Replace(Server.Name, "");
         if (filteredServerName != Server.Name)
         {
@@ -317,7 +301,7 @@ public partial class ACServerConfiguration
                 var schemaPath = ConfigurationSchemaGenerator.WritePluginConfigurationSchema(plugin);
                 ReferenceConfigurationHelper.WriteReferenceConfiguration(plugin.ReferenceConfigurationFileName,
                     schemaPath, plugin.ReferenceConfiguration, plugin.Name);
-                
+
                 if (File.Exists(configPath) && builder != null)
                 {
                     var deserializer = new DeserializerBuilder().Build();
@@ -342,7 +326,7 @@ public partial class ACServerConfiguration
             }
         }
 
-        if (Extra.MandatoryClientSecurityLevel > 0 
+        if (Extra.MandatoryClientSecurityLevel > 0
             && loader.LoadedPlugins.All(plugin => plugin.Name != "ClientSecurityPlugin"))
         {
             Log.Warning("ClientSecurityPlugin not installed, setting MandatoryClientSecurityLevel to 0");
@@ -360,7 +344,7 @@ public partial class ACServerConfiguration
     private static void ValidatePluginConfiguration(LoadedPlugin plugin, object configuration)
     {
         if (plugin.ValidatorType == null) return;
-        
+
         var validator = Activator.CreateInstance(plugin.ValidatorType)!;
         var method = typeof(DefaultValidatorExtensions).GetMethod(nameof(DefaultValidatorExtensions.ValidateAndThrow))!;
         var generic = method.MakeGenericMethod(configuration.GetType());
@@ -397,7 +381,7 @@ public partial class ACServerConfiguration
     private (PropertyInfo? Property, object Parent) GetNestedProperty(string key)
     {
         string[] path = key.Split('.');
-            
+
         object parent = this;
         PropertyInfo? propertyInfo = null;
 
@@ -405,7 +389,7 @@ public partial class ACServerConfiguration
         {
             propertyInfo = parent.GetType().GetProperty(property);
             if (propertyInfo == null) continue;
-                
+
             var propertyType = propertyInfo.PropertyType;
             if (!propertyType.IsPrimitive && !propertyType.IsEnum && propertyType != typeof(string))
             {

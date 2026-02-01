@@ -1,14 +1,13 @@
 using System.Text.RegularExpressions;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
-using AssettoServer.Server.Plugin;
 using AssettoServer.Server.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace ReverseProxyPlugin
 {
-    public class ReverseProxyTcpHandler : BackgroundService, IAssettoServerAutostart
+    public class ReverseProxyTcpHandler : BackgroundService
     {
         private readonly ReverseProxyConfiguration _config;
         private readonly EntryCarManager _entryCarManager;

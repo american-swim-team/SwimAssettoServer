@@ -24,4 +24,6 @@
   <Project Path="VotingPresetPlugin\VotingPresetPlugin.csproj" Type="Classic C#" />
   <Project Path="VotingWeatherPlugin\VotingWeatherPlugin.csproj" Type="Classic C#" />
   <Project Path="WordFilterPlugin\WordFilterPlugin.csproj" Type="Classic C#" />
+  <Project Path="TrafficAiPlugin\TrafficAiPlugin.csproj" Type="Classic C#" />
+  <Project Path="TrafficAiPlugin.Shared\TrafficAiPlugin.Shared.csproj" Type="Classic C#" />
 </Solution>

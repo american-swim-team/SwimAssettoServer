@@ -6,7 +6,6 @@ using AssettoServer.Server.GeoParams;
 using IniParser;
 using IniParser.Model;
 using JetBrains.Annotations;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AssettoServer.Server.Configuration.Kunos;
 
