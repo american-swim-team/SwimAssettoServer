@@ -70,6 +70,12 @@ public class AiState : IAiState, IDisposable
     private float _minObstacleDistance;
     private double _randomTwilight;
 
+    // Lane change state
+    private readonly LaneChangeState _laneChange = new();
+    private long _lastLaneChangeAttempt;
+    private long _laneChangeCompletedAt;
+    private int _laneChangeSourcePointId = -1; // For dual SlowestAiStates tracking during lane change
+
     private readonly ACServerConfiguration _serverConfiguration;
     private readonly TrafficAiConfiguration _configuration;
     private readonly SessionManager _sessionManager;
@@ -138,6 +144,18 @@ public class AiState : IAiState, IDisposable
     {
         Initialized = false;
         _spline.SlowestAiStates.Leave(CurrentSplinePointId, this);
+
+        // Clean up lane change source point tracking if mid-lane-change
+        if (_laneChangeSourcePointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
+            _laneChangeSourcePointId = -1;
+        }
+
+        if (_laneChange.IsChangingLane)
+        {
+            _laneChange.Abort();
+        }
     }
 
     private void SetRandomSpeed()
@@ -200,6 +218,13 @@ public class AiState : IAiState, IDisposable
         _junctionPassed = false;
         _endIndicatorDistance = 0;
         _lastTick = _sessionManager.ServerTimeMilliseconds;
+        _lastLaneChangeAttempt = 0;
+        _laneChangeCompletedAt = 0;
+        _laneChangeSourcePointId = -1;
+        if (_laneChange.IsChangingLane)
+        {
+            _laneChange.Abort();
+        }
         _minObstacleDistance = Random.Shared.Next(8, 13);
         SpawnCounter++;
         Initialized = true;
@@ -566,6 +591,12 @@ public class AiState : IAiState, IDisposable
 
         ClosestAiObstacleDistance = splineLookahead.ClosestAiState != null ? splineLookahead.ClosestAiStateDistance : -1;
 
+        // Consider lane change if blocked by slower traffic
+        if (!_laneChange.IsChangingLane)
+        {
+            ConsiderLaneChange(splineLookahead.ClosestAiState, splineLookahead.ClosestAiStateDistance);
+        }
+
         if (playerObstacle.distance < _minObstacleDistance || splineLookahead.ClosestAiStateDistance < _minObstacleDistance)
         {
             targetSpeed = 0;
@@ -635,6 +666,288 @@ public class AiState : IAiState, IDisposable
         {
             _stoppedForCollisionUntil = _sessionManager.ServerTimeMilliseconds + Random.Shared.Next(EntryCarAi.AiMinCollisionStopTimeMilliseconds, EntryCarAi.AiMaxCollisionStopTimeMilliseconds);
         }
+
+        // Abort any in-progress lane change on collision
+        if (_laneChange.IsChangingLane)
+        {
+            AbortLaneChange();
+        }
+    }
+
+    private bool IsTargetLaneClear(int targetPointId, bool isOvertake)
+    {
+        if (targetPointId < 0) return false;
+
+        var points = _spline.Points;
+        ref readonly var targetPoint = ref points[targetPointId];
+
+        // Check that target lane goes in same direction
+        if (!_spline.Operations.IsSameDirection(CurrentSplinePointId, targetPointId))
+            return false;
+
+        float lookAheadDistance = _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeLookAheadMultiplier;
+        float lookBehindDistance = _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeLookBehindMultiplier;
+        float timeHorizon = _configuration.LaneChangeTimeHorizonSeconds;
+
+        // Look ahead in target lane - check for slower AI blocking
+        float distanceAhead = 0;
+        int checkPointId = targetPointId;
+        while (distanceAhead < lookAheadDistance && checkPointId >= 0)
+        {
+            var slowest = _spline.SlowestAiStates[checkPointId];
+            if (slowest != null && slowest != this)
+            {
+                // Someone is ahead in target lane
+                float theirSpeed = Math.Min(slowest.CurrentSpeed, slowest.TargetSpeed);
+                if (theirSpeed < CurrentSpeed - _configuration.LaneChangeSpeedThresholdMs * 0.5f)
+                {
+                    // They're slower than us, lane not clear for overtake
+                    return false;
+                }
+            }
+
+            distanceAhead += points[checkPointId].Length;
+            checkPointId = points[checkPointId].NextId;
+        }
+
+        // Look behind in target lane - check for faster AI approaching
+        float distanceBehind = 0;
+        checkPointId = targetPointId;
+        while (distanceBehind < lookBehindDistance && checkPointId >= 0)
+        {
+            var slowest = _spline.SlowestAiStates[checkPointId];
+            if (slowest != null && slowest != this)
+            {
+                // Someone is behind in target lane
+                float theirSpeed = slowest.CurrentSpeed;
+                if (theirSpeed > CurrentSpeed + _configuration.LaneChangeSpeedThresholdMs)
+                {
+                    // They're faster and approaching, lane not clear
+                    return false;
+                }
+            }
+
+            distanceBehind += points[checkPointId].Length;
+            checkPointId = points[checkPointId].PreviousId;
+        }
+
+        // Check for players in target lane area
+        if (!ShouldIgnorePlayerObstacles())
+        {
+            var targetPosition = targetPoint.Position;
+            foreach (var car in _entryCarManager.EntryCars)
+            {
+                if (car.Client?.HasSentFirstUpdate == true)
+                {
+                    Vector3 futurePosition = car.Status.Position + car.Status.Velocity * timeHorizon;
+                    float distanceSquared = Vector3.DistanceSquared(futurePosition, targetPosition);
+                    if (distanceSquared < _configuration.LaneWidthMeters * _configuration.LaneWidthMeters * 4)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private void ConsiderLaneChange(AiState? closestObstacle, float obstacleDistance)
+    {
+        if (!_configuration.EnableLaneChanging) return;
+        if (_laneChange.IsChangingLane) return;
+        if (_nextJunctionId >= 0) return; // Don't lane change during junction approach
+
+        long currentTime = _sessionManager.ServerTimeMilliseconds;
+
+        // Check cooldown
+        if (currentTime - _lastLaneChangeAttempt < _configuration.LaneChangeCooldownMilliseconds)
+            return;
+
+        var points = _spline.Points;
+        ref readonly var currentPoint = ref points[CurrentSplinePointId];
+
+        // Trigger 1: Overtake slower traffic ahead (move to left/fast lane)
+        if (closestObstacle != null && obstacleDistance < _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeOvertakeTriggerMultiplier)
+        {
+            float speedDiff = CurrentSpeed - Math.Min(closestObstacle.CurrentSpeed, closestObstacle.TargetSpeed);
+            if (speedDiff > _configuration.LaneChangeSpeedThresholdMs && currentPoint.LeftId >= 0)
+            {
+                _lastLaneChangeAttempt = currentTime;
+                if (TryInitiateLaneChange(currentPoint.LeftId, true))
+                    return;
+            }
+        }
+
+        // Trigger 2: Return to slow lane after overtake (move to right lane)
+        if (currentPoint.RightId >= 0 && currentTime - _laneChangeCompletedAt > _configuration.LaneChangeCooldownMilliseconds * 2)
+        {
+            // Return right if we have no obstacle ahead or obstacle is far away
+            if (closestObstacle == null || obstacleDistance > _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeReturnToRightMultiplier)
+            {
+                _lastLaneChangeAttempt = currentTime;
+                if (TryInitiateLaneChange(currentPoint.RightId, false))
+                    return;
+            }
+        }
+
+        // Trigger 3: Small probability for spontaneous lane change for variety (prefer right/slow lane)
+        if (Random.Shared.NextDouble() < _configuration.LaneChangeSpontaneousProbability && closestObstacle == null)
+        {
+            int targetLane = currentPoint.RightId >= 0 ? currentPoint.RightId : currentPoint.LeftId;
+            if (targetLane >= 0)
+            {
+                _lastLaneChangeAttempt = currentTime;
+                TryInitiateLaneChange(targetLane, currentPoint.LeftId >= 0 && targetLane == currentPoint.LeftId);
+            }
+        }
+    }
+
+    private bool TryInitiateLaneChange(int targetPointId, bool isOvertake)
+    {
+        if (!IsTargetLaneClear(targetPointId, isOvertake))
+            return false;
+
+        var points = _spline.Points;
+        ref readonly var currentPoint = ref points[CurrentSplinePointId];
+        ref readonly var targetPoint = ref points[targetPointId];
+
+        // Calculate lane change distance based on current speed
+        float speedFactor = Math.Clamp(CurrentSpeed / _configuration.MaxSpeedMs, _configuration.LaneChangeSpeedFactorMin, _configuration.LaneChangeSpeedFactorMax);
+        float laneChangeDistance = _configuration.LaneChangeMinDistanceMeters +
+            ((_configuration.LaneChangeMaxDistanceMeters - _configuration.LaneChangeMinDistanceMeters) * speedFactor);
+
+        // Find target point ahead in target lane
+        float distanceAhead = 0;
+        int endPointId = targetPointId;
+        while (distanceAhead < laneChangeDistance && endPointId >= 0)
+        {
+            distanceAhead += points[endPointId].Length;
+            int nextId = points[endPointId].NextId;
+            if (nextId < 0) break;
+            endPointId = nextId;
+        }
+
+        if (endPointId < 0 || distanceAhead < _configuration.LaneChangeMinDistanceMeters)
+            return false;
+
+        ref readonly var endPoint = ref points[endPointId];
+
+        // Compute Catmull-Rom curve parameters
+        Vector3 startPosition = Status.Position;
+        Vector3 endPosition = endPoint.Position;
+
+        // Tangents: current direction and target lane direction, scaled by distance
+        Vector3 startTangent = Vector3.Normalize(Status.Velocity.Length() > 0.1f ? Status.Velocity : _spline.GetForwardVector(CurrentSplinePointId)) * laneChangeDistance * 0.5f;
+        Vector3 endTangent = _spline.GetForwardVector(endPointId) * laneChangeDistance * 0.5f;
+
+        // Get camber values for interpolation
+        float startCamber = _spline.Operations.GetCamber(CurrentSplinePointId);
+        float endCamber = _spline.Operations.GetCamber(endPointId);
+
+        // Set indicator
+        _indicator = isOvertake ? CarStatusFlags.IndicateLeft : CarStatusFlags.IndicateRight;
+
+        // Register in target lane for collision avoidance (source lane already tracked via CurrentSplinePointId)
+        _laneChangeSourcePointId = CurrentSplinePointId;
+        _spline.SlowestAiStates.Enter(targetPointId, this);
+
+        // Begin lane change
+        _laneChange.Begin(
+            CurrentSplinePointId,
+            endPointId,
+            startPosition,
+            endPosition,
+            startTangent,
+            endTangent,
+            startCamber,
+            endCamber,
+            isOvertake);
+
+        Log.Verbose("AI {SessionId} starting lane change from point {SourcePoint} to {TargetPoint}, overtake={IsOvertake}",
+            EntryCarAi.EntryCar.SessionId, CurrentSplinePointId, endPointId, isOvertake);
+
+        return true;
+    }
+
+    private void CompleteLaneChange()
+    {
+        if (!_laneChange.IsChangingLane) return;
+
+        int targetPointId = _laneChange.TargetPointId;
+
+        // Leave the old source lane registration
+        if (_laneChangeSourcePointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
+            _laneChangeSourcePointId = -1;
+        }
+
+        // Update current point to target lane
+        // Note: We need to manually set _currentSplinePointId to avoid the property's Enter/Leave logic
+        // since we already registered in the target lane when initiating
+        _spline.SlowestAiStates.Leave(_currentSplinePointId, this);
+        _currentSplinePointId = targetPointId;
+        _spline.SlowestAiStates.Enter(targetPointId, this);
+
+        // Reset junction evaluator for new lane
+        _junctionEvaluator.Clear();
+
+        // Recalculate tangents for new lane
+        if (!_junctionEvaluator.TryNext(CurrentSplinePointId, out var nextPointId))
+        {
+            Log.Debug("Car {SessionId} cannot find next point after lane change, despawning", EntryCarAi.EntryCar.SessionId);
+            _laneChange.Complete();
+            Despawn();
+            return;
+        }
+
+        _currentVecLength = (_spline.Points[nextPointId].Position - _spline.Points[CurrentSplinePointId].Position).Length();
+        _currentVecProgress = 0;
+        CalculateTangents();
+
+        // Clear indicator after a short distance
+        _endIndicatorDistance = _configuration.LaneChangeIndicatorClearDistanceMeters;
+        _junctionPassed = true; // Reuse the junction indicator logic for clearing
+
+        // Adjust max speed for new lane (right lanes get speed offset)
+        // Calculate the old lane offset and new lane offset
+        bool oldLaneHadLeft = _laneChange.SourcePointId >= 0 && _spline.Points[_laneChange.SourcePointId].LeftId >= 0;
+        bool newLaneHasLeft = _spline.Points[CurrentSplinePointId].LeftId >= 0;
+        float oldLaneOffset = oldLaneHadLeft ? _configuration.RightLaneOffsetMs : 0;
+        float newLaneOffset = newLaneHasLeft ? _configuration.RightLaneOffsetMs : 0;
+        float speedAdjustment = newLaneOffset - oldLaneOffset;
+        InitialMaxSpeed += speedAdjustment;
+        MaxSpeed = Math.Max(MaxSpeed, InitialMaxSpeed);
+
+        _laneChangeCompletedAt = _sessionManager.ServerTimeMilliseconds;
+        _laneChange.Complete();
+
+        Log.Verbose("AI {SessionId} completed lane change to point {TargetPoint}", EntryCarAi.EntryCar.SessionId, targetPointId);
+    }
+
+    private void AbortLaneChange()
+    {
+        if (!_laneChange.IsChangingLane) return;
+
+        // Leave the target lane registration we made when initiating
+        if (_laneChange.TargetPointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChange.TargetPointId, this);
+        }
+
+        // Clean up source point tracking
+        if (_laneChangeSourcePointId >= 0)
+        {
+            // Leave the source point and re-enter current point
+            _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
+            _laneChangeSourcePointId = -1;
+        }
+
+        _indicator = 0;
+        _laneChange.Abort();
+
+        Log.Verbose("AI {SessionId} aborted lane change", EntryCarAi.EntryCar.SessionId);
     }
 
     /// <returns>0 is the rear <br/> Angle is counterclockwise</returns>
@@ -687,7 +1000,7 @@ public class AiState : IAiState, IDisposable
         if (Acceleration != 0)
         {
             CurrentSpeed += Acceleration * (dt / 1000.0f);
-                
+
             if ((Acceleration < 0 && CurrentSpeed < TargetSpeed) || (Acceleration > 0 && CurrentSpeed > TargetSpeed))
             {
                 CurrentSpeed = TargetSpeed;
@@ -696,33 +1009,62 @@ public class AiState : IAiState, IDisposable
         }
 
         float moveMeters = (dt / 1000.0f) * CurrentSpeed;
-        if (!Move(_currentVecProgress + moveMeters) || !_junctionEvaluator.TryNext(CurrentSplinePointId, out var nextPoint))
+
+        Vector3 smoothPosition;
+        Vector3 smoothTangent;
+        float camber;
+
+        if (_laneChange.IsChangingLane)
         {
-            Log.Debug("Car {SessionId} reached spline end, despawning", EntryCarAi.EntryCar.SessionId);
-            Despawn();
-            return;
+            // Lane change movement
+            _laneChange.UpdateProgress(moveMeters);
+
+            var laneChangePoint = _laneChange.GetInterpolatedPoint();
+            smoothPosition = laneChangePoint.Position;
+            smoothTangent = laneChangePoint.Tangent;
+            camber = _laneChange.GetInterpolatedCamber();
+
+            // Check if lane change is complete
+            if (_laneChange.IsComplete)
+            {
+                CompleteLaneChange();
+            }
+        }
+        else
+        {
+            // Normal spline movement
+            if (!Move(_currentVecProgress + moveMeters) || !_junctionEvaluator.TryNext(CurrentSplinePointId, out var nextPoint))
+            {
+                Log.Debug("Car {SessionId} reached spline end, despawning", EntryCarAi.EntryCar.SessionId);
+                Despawn();
+                return;
+            }
+
+            CatmullRom.CatmullRomPoint smoothPos = CatmullRom.Evaluate(ops.Points[CurrentSplinePointId].Position,
+                ops.Points[nextPoint].Position,
+                _startTangent,
+                _endTangent,
+                _currentVecProgress / _currentVecLength);
+
+            smoothPosition = smoothPos.Position;
+            smoothTangent = smoothPos.Tangent;
+            camber = ops.GetCamber(CurrentSplinePointId, _currentVecProgress / _currentVecLength);
         }
 
-        CatmullRom.CatmullRomPoint smoothPos = CatmullRom.Evaluate(ops.Points[CurrentSplinePointId].Position, 
-            ops.Points[nextPoint].Position, 
-            _startTangent, 
-            _endTangent, 
-            _currentVecProgress / _currentVecLength);
-            
         Vector3 rotation = new Vector3
         {
-            X = MathF.Atan2(smoothPos.Tangent.Z, smoothPos.Tangent.X) - MathF.PI / 2,
-            Y = (MathF.Atan2(new Vector2(smoothPos.Tangent.Z, smoothPos.Tangent.X).Length(), smoothPos.Tangent.Y) - MathF.PI / 2) * -1f,
-            Z = ops.GetCamber(CurrentSplinePointId, _currentVecProgress / _currentVecLength)
+            X = MathF.Atan2(smoothTangent.Z, smoothTangent.X) - MathF.PI / 2,
+            Y = (MathF.Atan2(new Vector2(smoothTangent.Z, smoothTangent.X).Length(), smoothTangent.Y) - MathF.PI / 2) * -1f,
+            Z = camber
         };
 
         float tyreAngularSpeed = GetTyreAngularSpeed(CurrentSpeed, EntryCarAi.TyreDiameterMeters);
         byte encodedTyreAngularSpeed =  (byte) (Math.Clamp(MathF.Round(MathF.Log10(tyreAngularSpeed + 1.0f) * 20.0f) * Math.Sign(tyreAngularSpeed), -100.0f, 154.0f) + 100.0f);
 
         Status.Timestamp = _sessionManager.ServerTimeMilliseconds;
-        Status.Position = smoothPos.Position with { Y = smoothPos.Position.Y + EntryCarAi.AiSplineHeightOffsetMeters };
+        Status.Position = smoothPosition with { Y = smoothPosition.Y + EntryCarAi.AiSplineHeightOffsetMeters };
         Status.Rotation = rotation;
-        Status.Velocity = smoothPos.Tangent * CurrentSpeed;
+        Status.Velocity = smoothTangent * CurrentSpeed;
         Status.SteerAngle = 127;
         Status.WheelAngle = 127;
         Status.TyreAngularSpeed[0] = encodedTyreAngularSpeed;

@@ -82,7 +82,49 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
     public bool TwoWayTraffic { get; set; } = false;
     [YamlMember(Description = "Enable traffic spawning if the player is driving the wrong way. Only takes effect when TwoWayTraffic is set to false.")]
     public bool WrongWayTraffic { get; set; } = true;
-    
+
+    [YamlMember(Description = "Enable AI lane changing behavior")]
+    public bool EnableLaneChanging { get; set; } = true;
+
+    [YamlMember(Description = "Minimum distance for lane change maneuver (meters)")]
+    public float LaneChangeMinDistanceMeters { get; set; } = 20f;
+
+    [YamlMember(Description = "Maximum distance for lane change maneuver (meters)")]
+    public float LaneChangeMaxDistanceMeters { get; set; } = 50f;
+
+    [YamlMember(Description = "Speed difference threshold to trigger overtake (km/h)")]
+    public float LaneChangeSpeedThresholdKph { get; set; } = 10f;
+
+    [YamlMember(Description = "Cooldown between lane change attempts (seconds)")]
+    public float LaneChangeCooldownSeconds { get; set; } = 8f;
+
+    [YamlMember(Description = "Multiplier for max distance when checking ahead in target lane")]
+    public float LaneChangeLookAheadMultiplier { get; set; } = 2.0f;
+
+    [YamlMember(Description = "Multiplier for max distance when checking behind in target lane")]
+    public float LaneChangeLookBehindMultiplier { get; set; } = 1.0f;
+
+    [YamlMember(Description = "Time horizon in seconds for player position prediction during lane change safety checks")]
+    public float LaneChangeTimeHorizonSeconds { get; set; } = 2.0f;
+
+    [YamlMember(Description = "Distance multiplier to trigger overtake lane change")]
+    public float LaneChangeOvertakeTriggerMultiplier { get; set; } = 1.5f;
+
+    [YamlMember(Description = "Distance multiplier for when to return to right/slow lane")]
+    public float LaneChangeReturnToRightMultiplier { get; set; } = 2.0f;
+
+    [YamlMember(Description = "Probability per tick for spontaneous lane change (0.0-1.0)")]
+    public float LaneChangeSpontaneousProbability { get; set; } = 0.001f;
+
+    [YamlMember(Description = "Distance after lane change to keep indicator on (meters)")]
+    public float LaneChangeIndicatorClearDistanceMeters { get; set; } = 20.0f;
+
+    [YamlMember(Description = "Minimum speed factor for lane change distance calculation")]
+    public float LaneChangeSpeedFactorMin { get; set; } = 0.5f;
+
+    [YamlMember(Description = "Maximum speed factor for lane change distance calculation")]
+    public float LaneChangeSpeedFactorMax { get; set; } = 1.5f;
+
     [ObservableProperty]
     [property: YamlMember(Description = "AI cornering speed factor. Lower = AI cars will drive slower around corners.")]
     private float _corneringSpeedFactor = 0.65f;
@@ -143,6 +185,8 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
     [YamlIgnore] public float RightLaneOffsetMs => RightLaneOffsetKph / 3.6f;
     [YamlIgnore] public int IgnoreObstaclesAfterMilliseconds => IgnoreObstaclesAfterSeconds * 1000;
     [YamlIgnore] public int AiBehaviorUpdateIntervalMilliseconds => 1000 / AiBehaviorUpdateIntervalHz;
+    [YamlIgnore] public float LaneChangeSpeedThresholdMs => LaneChangeSpeedThresholdKph / 3.6f;
+    [YamlIgnore] public int LaneChangeCooldownMilliseconds => (int)(LaneChangeCooldownSeconds * 1000);
 
     internal void ApplyConfigurationFixes(ACServerConfiguration serverConfiguration)
     {

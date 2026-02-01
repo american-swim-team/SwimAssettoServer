@@ -7,9 +7,12 @@ server_dir := "server"
 config_dest := server_dir + "/cfg"
 content_dir := server_dir + "/content"
 
+# Use system dotnet (.NET 9) instead of linuxbrew (.NET 10)
+dotnet := "/usr/bin/dotnet"
+
 # Build the project and copy plugins
 build:
-    dotnet build -c Release
+    {{dotnet}} build AssettoServer/AssettoServer.csproj -c Release
     @just copy-plugins
 
 # Copy enabled plugins to the plugins directory
@@ -18,14 +21,19 @@ copy-plugins:
     set -euo pipefail
     plugins_dir="AssettoServer/bin/Release/net9.0/plugins"
     mkdir -p "$plugins_dir"
-    for plugin in SwimCrashPlugin RandomWeatherPlugin ReportPlugin DiscordAuditPlugin SwimCutupPlugin ReverseProxyPlugin; do
+    for plugin in SwimCrashPlugin RandomWeatherPlugin ReportPlugin DiscordAuditPlugin SwimCutupPlugin ReverseProxyPlugin TrafficAiPlugin; do
         mkdir -p "$plugins_dir/$plugin"
-        cp "$plugin/bin/Release/net9.0/"*.dll "$plugins_dir/$plugin/"
+        /usr/bin/dotnet build "$plugin/$plugin.csproj" -c Release
+        cp "$plugin/bin/Release/net9.0/"*.dll "$plugins_dir/$plugin/" 2>/dev/null || true
     done
+    # TrafficAiPlugin.Shared is a dependency, copy it too
+    mkdir -p "$plugins_dir/TrafficAiPlugin.Shared"
+    /usr/bin/dotnet build "TrafficAiPlugin.Shared/TrafficAiPlugin.Shared.csproj" -c Release
+    cp "TrafficAiPlugin.Shared/bin/Release/net9.0/"*.dll "$plugins_dir/TrafficAiPlugin.Shared/" 2>/dev/null || true
 
 # Publish for local runtime
 publish:
-    dotnet publish AssettoServer/AssettoServer.csproj -c Release --no-self-contained
+    {{dotnet}} publish AssettoServer/AssettoServer.csproj -c Release --no-self-contained
 
 # Setup config directory with swim-srp-public config
 setup-config:
@@ -54,9 +62,9 @@ sync-content:
 
 # Run the server (from server/ directory)
 run: build
-    cd {{server_dir}} && ../AssettoServer/bin/Release/net9.0/AssettoServer
+    cd {{server_dir}} && {{dotnet}} run --project ../AssettoServer/AssettoServer.csproj -c Release --no-build
 
 # Clean build artifacts and server files
 clean:
-    dotnet clean
+    {{dotnet}} clean
     rm -rf {{server_dir}}/
