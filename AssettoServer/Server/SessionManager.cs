@@ -11,19 +11,19 @@ using AssettoServer.Server.Weather;
 using AssettoServer.Shared.Model;
 using AssettoServer.Shared.Network.Packets.Incoming;
 using AssettoServer.Shared.Network.Packets.Outgoing;
-using AssettoServer.Shared.Services;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace AssettoServer.Server;
 
-public class SessionManager : CriticalBackgroundService
+public class SessionManager : BackgroundService, IHostedLifecycleService
 {
     private readonly ACServerConfiguration _configuration;
     private readonly Func<SessionConfiguration, SessionState> _sessionStateFactory;
     private readonly Stopwatch _timeSource = new();
     private readonly EntryCarManager _entryCarManager;
     private readonly Lazy<WeatherManager> _weatherManager;
+    private readonly IHostApplicationLifetime _applicationLifetime;
 
     public int CurrentSessionIndex { get; private set; } = -1;
     public bool IsLastRaceInverted { get; private set; } = false;
@@ -35,7 +35,7 @@ public class SessionManager : CriticalBackgroundService
     public bool IsOpen => CurrentSession.Configuration.IsOpen switch
     {
         IsOpenMode.Open => true,
-        IsOpenMode.CloseAtStart => !CurrentSession.IsStarted,
+        IsOpenMode.CloseAtStart => !CurrentSession.IsCutoffReached,
         _ => false,
     };
 
@@ -48,24 +48,18 @@ public class SessionManager : CriticalBackgroundService
         Func<SessionConfiguration, SessionState> sessionStateFactory,
         EntryCarManager entryCarManager,
         Lazy<WeatherManager> weatherManager,
-        IHostApplicationLifetime applicationLifetime) : base(applicationLifetime)
+        IHostApplicationLifetime applicationLifetime)
     {
         _configuration = configuration;
         _sessionStateFactory = sessionStateFactory;
         _entryCarManager = entryCarManager;
         _weatherManager = weatherManager;
+        _applicationLifetime = applicationLifetime;
 
         _entryCarManager.ClientConnected += OnClientConnected;
     }
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _timeSource.Start();
-        NextSession();
 
-        await LoopAsync(stoppingToken);
-    }
-
-    private async Task LoopAsync(CancellationToken token)
+    protected override async Task ExecuteAsync(CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
 
@@ -286,25 +280,25 @@ public class SessionManager : CriticalBackgroundService
 
         if (CurrentSession.Configuration.IsOpen == IsOpenMode.Closed && connectedCount < 2)
         {
+            Log.Information("Skipping race session: didn't reach minimum player count before cutoff ({PlayerCount}/2). Use 'IS_OPEN=1' to allow joining during the race", connectedCount);
             return true;
         }
 
         if (CurrentSession.Configuration.IsOpen != IsOpenMode.CloseAtStart)
         {
-            return connectedCount == 0;
+            if (connectedCount > 0) return false;
+            
+            Log.Information("Skipping race session: no player connected");
+            return true;
         }
 
-        switch (CurrentSession.Configuration.Type)
+        if (connectedCount < 2 && CurrentSession.IsCutoffReached)
         {
-            case SessionType.Race when connectedCount > 0 && Program.IsDebugBuild:
-                return false;
-            case SessionType.Race when connectedCount == 0 && Program.IsDebugBuild:
-                return true;
-            case SessionType.Race when connectedCount <= 1:
-                return true;
-            default:
-                return false;
+            Log.Information("Skipping race session: didn't reach minimum player count before cutoff ({PlayerCount}/2). Use 'IS_OPEN=1' to allow joining during the race", connectedCount);
+            return true;
         }
+        
+        return false;
     }
 
     private void CalcOverTime()
@@ -372,7 +366,6 @@ public class SessionManager : CriticalBackgroundService
         foreach (var entryCar in _entryCarManager.EntryCars)
         {
             CurrentSession.Results?.Add(entryCar.SessionId, new EntryCarResult(entryCar.Client));
-            entryCar.Reset();
         }
 
         var sessionLength = CurrentSession.Configuration switch
@@ -440,7 +433,6 @@ public class SessionManager : CriticalBackgroundService
         if (_entryCarManager.EntryCars.Any(c => c.Client is { HasSentFirstUpdate: false }))
             return false;
 
-
         SetSession(CurrentSessionIndex);
         return true;
     }
@@ -460,7 +452,9 @@ public class SessionManager : CriticalBackgroundService
             }
             else if (CurrentSession.Configuration.Type != SessionType.Race || _configuration.Server.InvertedGridPositions == 0 || IsLastRaceInverted)
             {
-                // TODO exit
+                Log.Information("Set LOOP_MODE=1 in the server_cfg.ini to loop sessions");
+                _applicationLifetime.StopApplication();
+                return false;
             }
 
             if (CurrentSession.Configuration.Type == SessionType.Race && _configuration.Server.InvertedGridPositions != 0)
@@ -540,4 +534,18 @@ public class SessionManager : CriticalBackgroundService
         CurrentSession.HasSentRaceOverPacket = true;
         CurrentSession.OverTimeMilliseconds = ServerTimeMilliseconds;
     }
+
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartingAsync(CancellationToken cancellationToken)
+    {
+        _timeSource.Start();
+        NextSession();
+        
+        return Task.CompletedTask;
+    }
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

@@ -3,7 +3,7 @@ permissions:
   contents: write
 on:
   push:
-    tags:        
+    tags:
       - 'v*'
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.x
+        dotnet-version: 9.0.3xx
     - name: Run projects.ps1
       run: |
         chmod +x ./projects.ps1

@@ -1,9 +1,7 @@
-using FluentValidation;
-using JetBrains.Annotations;
+﻿using FluentValidation;
 
 namespace TimeDilationPlugin;
 
-[UsedImplicitly]
 public class TimeDilationConfigurationValidator : AbstractValidator<TimeDilationConfiguration>
 {
     public TimeDilationConfigurationValidator()
@@ -13,7 +11,7 @@ public class TimeDilationConfigurationValidator : AbstractValidator<TimeDilation
         {
             salut.RuleFor(s => s.TimeMult).GreaterThanOrEqualTo(0);
         });
-        
+
         RuleFor(cfg => cfg.TimeLookupTable).NotEmpty().Unless(cfg => cfg.SunAngleLookupTable.Count > 0);
         RuleForEach(cfg => cfg.TimeLookupTable).ChildRules(tlut =>
         {

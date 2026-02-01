@@ -8,13 +8,11 @@ using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
 using AssettoServer.Server.Configuration.Kunos;
-using AssettoServer.Server.Plugin;
 using AssettoServer.Server.Weather;
 using AssettoServer.Shared.Network.Packets;
 using AssettoServer.Shared.Network.Packets.Outgoing;
 using AssettoServer.Shared.Network.Packets.Shared;
 using AssettoServer.Shared.Network.Packets.UdpPlugin;
-using AssettoServer.Shared.Services;
 using AssettoServer.Shared.Utils;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -26,7 +24,7 @@ using Version = AssettoServer.Shared.Network.Packets.UdpPlugin.Version;
 
 namespace AssettoServer.Network.Udp;
 
-public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostart
+public class UdpPluginServer : BackgroundService
 {
     private readonly ACServerConfiguration _configuration;
     private readonly ChatService _chatService;
@@ -45,8 +43,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
         WeatherManager weatherManager,
         ACServerConfiguration configuration,
         EntryCarManager entryCarManager,
-        ChatService chatService,
-        IHostApplicationLifetime applicationLifetime) : base(applicationLifetime)
+        ChatService chatService)
     {
         _configuration = configuration;
         _chatService = chatService;
@@ -154,11 +151,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
                     Log.Information("Ignoring UDP Plugin packet from address {Address}", address);
                 }
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-            {
-                // This is a workaround because on Linux, the SocketAddress Size will be set to 0 for some reason
-                address.Size = address.Buffer.Length;
-            }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut) { }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error in UDP plugin receive loop");
@@ -264,7 +257,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
                 case UdpPluginProtocol.BroadcastChat:
                 {
                     string message = packetReader.ReadUTF32String();
-                    _entryCarManager.BroadcastPacket(new ChatMessage { SessionId = 0xFF, Message = message });
+                    _entryCarManager.BroadcastChat(message);
                     break;
                 }
                 case UdpPluginProtocol.GetSessionInfo:
@@ -356,7 +349,7 @@ public class UdpPluginServer : CriticalBackgroundService, IAssettoServerAutostar
         {
             sessionConfig = currentSession.Configuration;
         }
-        else if (sessionId > 0 && sessionId < _configuration.Sessions.Count)
+        else if (sessionId >= 0 && sessionId < _configuration.Sessions.Count)
         {
             sessionConfig = _configuration.Sessions[sessionId];
         }

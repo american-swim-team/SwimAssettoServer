@@ -8,6 +8,7 @@ using AssettoServer.Server.Configuration.Extra;
 using AssettoServer.Server.Weather;
 using AssettoServer.Shared.Model;
 using AssettoServer.Shared.Network.Packets.Outgoing;
+using AssettoServer.Shared.Utils;
 using AssettoServer.Utils;
 using JPBotelho;
 using Serilog;
@@ -15,7 +16,7 @@ using SunCalcNet.Model;
 
 namespace AssettoServer.Server.Ai;
 
-public class AiState
+public class AiState : IDisposable
 {
     public CarStatus Status { get; } = new();
     public bool Initialized { get; private set; }
@@ -107,6 +108,17 @@ public class AiState
         _junctionEvaluator = new JunctionEvaluator(spline);
 
         _lastTick = _sessionManager.ServerTimeMilliseconds;
+    }
+
+    ~AiState()
+    {
+        Despawn();
+    }
+    
+    public void Dispose()
+    {
+        Despawn();
+        GC.SuppressFinalize(this);
     }
 
     public void Despawn()
@@ -705,7 +717,6 @@ public class AiState
         Status.TyreAngularSpeed[3] = encodedTyreAngularSpeed;
         Status.EngineRpm = (ushort)MathUtils.Lerp(EntryCar.AiIdleEngineRpm, EntryCar.AiMaxEngineRpm, CurrentSpeed / _configuration.Extra.AiParams.MaxSpeedMs);
         Status.StatusFlag = GetLights(_configuration.Extra.AiParams.EnableDaytimeLights, _weatherManager.CurrentSunPosition, _randomTwilight)
-                            | CarStatusFlags.HighBeamsOff
                             | (_sessionManager.ServerTimeMilliseconds < _stoppedForCollisionUntil || CurrentSpeed < 20 / 3.6f ? CarStatusFlags.HazardsOn : 0)
                             | (CurrentSpeed == 0 || Acceleration < 0 ? CarStatusFlags.BrakeLightsOn : 0)
                             | (_stoppedForObstacle && _sessionManager.ServerTimeMilliseconds > _obstacleHonkStart && _sessionManager.ServerTimeMilliseconds < _obstacleHonkEnd ? CarStatusFlags.Horn : 0)
@@ -732,8 +743,9 @@ public class AiState
     
     private static CarStatusFlags GetLights(bool daytimeLights, SunPosition? sunPosition, double twilight)
     {
-        if (daytimeLights || sunPosition == null) return CarStatusFlags.LightsOn;
+        const CarStatusFlags lightFlags = CarStatusFlags.LightsOn | CarStatusFlags.HighBeamsOff;
+        if (daytimeLights || sunPosition == null) return lightFlags;
 
-        return sunPosition.Value.Altitude < twilight ? CarStatusFlags.LightsOn : 0;
+        return sunPosition.Value.Altitude < twilight ? lightFlags : 0;
     }
 }

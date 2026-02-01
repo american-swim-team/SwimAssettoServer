@@ -1,16 +1,13 @@
 ﻿using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
-using AssettoServer.Server.Plugin;
 using AssettoServer.Server.Weather;
-using AssettoServer.Shared.Network.Packets.Shared;
-using AssettoServer.Shared.Services;
 using AssettoServer.Shared.Weather;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace VotingWeatherPlugin;
 
-public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
+public class VotingWeather : BackgroundService
 {
     private readonly WeatherManager _weatherManager;
     private readonly IWeatherTypeProvider _weatherTypeProvider;
@@ -28,7 +25,10 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
         public int Votes { get; set; }
     }
 
-    public VotingWeather(VotingWeatherConfiguration configuration, WeatherManager weatherManager, IWeatherTypeProvider weatherTypeProvider, EntryCarManager entryCarManager, IHostApplicationLifetime applicationLifetime) : base(applicationLifetime)
+    public VotingWeather(VotingWeatherConfiguration configuration,
+        WeatherManager weatherManager,
+        IWeatherTypeProvider weatherTypeProvider,
+        EntryCarManager entryCarManager)
     {
         _configuration = configuration;
         _weatherManager = weatherManager;
@@ -67,19 +67,19 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
     {
         if (!_votingOpen)
         {
-            client.SendPacket(new ChatMessage { SessionId = 255, Message = "There is no ongoing weather vote." });
+            client.SendChatMessage("There is no ongoing weather vote.");
             return;
         }
 
         if (choice >= _availableWeathers.Count || choice < 0)
         {
-            client.SendPacket(new ChatMessage { SessionId = 255, Message = "Invalid choice." });
+            client.SendChatMessage("Invalid choice.");
             return;
         }
 
         if (_alreadyVoted.Contains(client))
         {
-            client.SendPacket(new ChatMessage { SessionId = 255, Message = "You voted already." });
+            client.SendChatMessage("You voted already.");
             return;
         }
 
@@ -88,7 +88,7 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
         var votedWeather = _availableWeathers[choice];
         votedWeather.Votes++;
 
-        client.SendPacket(new ChatMessage { SessionId = 255, Message = $"Your vote for {votedWeather.Weather} has been counted." });
+        client.SendChatMessage($"Your vote for {votedWeather.Weather} has been counted.");
     }
 
     private async Task UpdateAsync(CancellationToken stoppingToken)
@@ -100,7 +100,7 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
 
         var weathersLeft = new List<WeatherFxType>(_weathers);
 
-        _entryCarManager.BroadcastPacket(new ChatMessage { SessionId = 255, Message = "Vote for next weather:" });
+        _entryCarManager.BroadcastChat("Vote for next weather:");
         for (int i = 0; i < _configuration.NumChoices; i++)
         {
             if (weathersLeft.Count < 1) break;
@@ -109,7 +109,7 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
             _availableWeathers.Add(new WeatherChoice { Weather = nextWeather, Votes = 0 });
             weathersLeft.Remove(nextWeather);
 
-            _entryCarManager.BroadcastPacket(new ChatMessage { SessionId = 255, Message = $" /w {i} - {nextWeather}" });
+            _entryCarManager.BroadcastChat($" /w {i} - {nextWeather}");
         }
 
         _votingOpen = true;
@@ -122,7 +122,13 @@ public class VotingWeather : CriticalBackgroundService, IAssettoServerAutostart
         var winner = weathers[Random.Shared.Next(weathers.Count)];
         var winnerType = _weatherTypeProvider.GetWeatherType(winner);
 
-        _entryCarManager.BroadcastPacket(new ChatMessage { SessionId = 255, Message = $"Weather vote ended. Next weather: {winner}" });
+        if (maxVotes == 0 && _configuration.KeepWeatherOnNoVotes)
+        {
+            _entryCarManager.BroadcastChat("Weather vote ended without any votes cast. Not changing weather.");
+            return;
+        }
+        
+        _entryCarManager.BroadcastChat($"Weather vote ended. Next weather: {winner}");
 
         _weatherManager.SetWeather(new WeatherData(last.Type, winnerType)
         {

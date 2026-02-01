@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using AssettoServer.Server.Configuration;
-using AssettoServer.Shared.Services;
 using AssettoServer.Utils;
 using Microsoft.Extensions.Hosting;
 using Polly;
@@ -13,14 +12,14 @@ using Serilog;
 
 namespace AssettoServer.Server;
 
-public class KunosLobbyRegistration : CriticalBackgroundService
+public class KunosLobbyRegistration : BackgroundService
 {
     private readonly ACServerConfiguration _configuration;
     private readonly SessionManager _sessionManager;
     private readonly EntryCarManager _entryCarManager;
     private readonly HttpClient _httpClient;
 
-    public KunosLobbyRegistration(ACServerConfiguration configuration, SessionManager sessionManager, EntryCarManager entryCarManager, HttpClient httpClient, IHostApplicationLifetime applicationLifetime) : base(applicationLifetime)
+    public KunosLobbyRegistration(ACServerConfiguration configuration, SessionManager sessionManager, EntryCarManager entryCarManager, HttpClient httpClient)
     {
         _configuration = configuration;
         _sessionManager = sessionManager;
@@ -73,8 +72,9 @@ public class KunosLobbyRegistration : CriticalBackgroundService
         var localIp = NetworkUtils.GetPrimaryIpAddress();
         var routerIp = NetworkUtils.GetGatewayAddressForInterfaceWithIpAddress(localIp);
         Log.Error("""
-                  Your ports are not forwarded correctly. The server will continue to run, but players outside of your network won't be able to join.
-                  To fix this, you'll need to go into your router settings and create Port Forwards for these ports:
+                  Your ports are not forwarded correctly or your firewall is blocking the connection.
+                  The server will continue to run, but players outside of your network won't be able to join.
+                  To fix this, check your firewall settings or go into your router settings and create Port Forwards for these ports:
                   Port {UdpPort} UDP
                   Port {TcpPort} TCP
                   Port {HttpPort} TCP

@@ -1,27 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <SelfContained>false</SelfContained>
-    <DebugType>embedded</DebugType>
-    <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
-    <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
-    <ProjectGuid>{583AC4D8-2B10-452B-90AE-767F5523A5A3}</ProjectGuid>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
-      <Private>false</Private>
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="MaxMind.GeoIP2" Version="5.2.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis" Version="4.11.0" />
-  </ItemGroup>
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EnableDynamicLoading>true</EnableDynamicLoading>
+        <SelfContained>false</SelfContained>
+        <DebugType>embedded</DebugType>
+        <PublishDir>..\out-$(RuntimeIdentifier)\plugins\$(MSBuildProjectName)\</PublishDir>
+        <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <OutputPath>..\AssettoServer\bin\$(Configuration)\$(TargetFramework)\plugins\$(MSBuildProjectName)</OutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AssettoServer\AssettoServer.csproj">
+            <Private>false</Private>
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </ProjectReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="MaxMind.GeoIP2" Version="5.4.1" />
+    </ItemGroup>
+
 </Project>

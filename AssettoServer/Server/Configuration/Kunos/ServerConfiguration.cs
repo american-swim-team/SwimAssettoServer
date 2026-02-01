@@ -20,15 +20,15 @@ public class ServerConfiguration
     [IniField("SERVER", "NAME")] public string Name { get; set; } = "AssettoServer";
     [IniField("SERVER", "PASSWORD")] public string? Password { get; set; }
     [IniField("SERVER", "ADMIN_PASSWORD")] public string? AdminPassword { get; set; }
-    [IniField("SERVER", "MAX_CLIENTS")] public int MaxClients { get; init; }
-    [IniField("SERVER", "UDP_PORT")] public ushort UdpPort { get; init; } = DefaultUdpPort;
-    [IniField("SERVER", "TCP_PORT")] public ushort TcpPort { get; init; } = DefaultTcpPort;
-    [IniField("SERVER", "HTTP_PORT")] public ushort HttpPort { get; init; } = DefaultHttpPort;
+    [IniField("SERVER", "MAX_CLIENTS")] public int MaxClients { get; internal set; }
+    [IniField("SERVER", "UDP_PORT")] public ushort UdpPort { get; set; } = DefaultUdpPort;
+    [IniField("SERVER", "TCP_PORT")] public ushort TcpPort { get; set; } = DefaultTcpPort;
+    [IniField("SERVER", "HTTP_PORT")] public ushort HttpPort { get; set; } = DefaultHttpPort;
     [IniField("SERVER", "CLIENT_SEND_INTERVAL_HZ")] public byte RefreshRateHz { get; init; } = 20;
     [IniField("SERVER", "TRACK")] public string Track { get; internal set; } = "";
     [IniField("SERVER", "CONFIG_TRACK")] public string TrackConfig { get; init; } = "";
     [IniField("SERVER", "SUN_ANGLE")] public float SunAngle { get; init; }
-    [IniField("SERVER", "LOOP_MODE")] public bool Loop { get; init; }
+    [IniField("SERVER", "LOOP_MODE")] public bool Loop { get; init; } = true;
     [IniField("SERVER", "TC_ALLOWED")] public byte TractionControlAllowed { get; init; }
     [IniField("SERVER", "ABS_ALLOWED")] public byte ABSAllowed { get; init; }
     [IniField("SERVER", "ALLOWED_TYRES_OUT")] public short AllowedTyresOutCount { get; init; }

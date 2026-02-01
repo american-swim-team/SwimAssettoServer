@@ -11,14 +11,13 @@ using AssettoServer.Server.Configuration;
 using AssettoServer.Shared.Model;
 using AssettoServer.Shared.Network.Packets;
 using AssettoServer.Shared.Network.Packets.Incoming;
-using AssettoServer.Shared.Services;
 using AssettoServer.Shared.Utils;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
 namespace AssettoServer.Network.Udp;
 
-public class ACUdpServer : CriticalBackgroundService
+public class ACUdpServer : BackgroundService
 {
     private readonly ACServerConfiguration _configuration;
     private readonly SessionManager _sessionManager;
@@ -28,14 +27,13 @@ public class ACUdpServer : CriticalBackgroundService
     private readonly Socket _socket;
     
     private readonly ConcurrentDictionary<SocketAddress, EntryCar> _endpointCars = new();
-    private static readonly byte[] CarConnectResponse = { (byte)ACServerProtocol.CarConnect };
+    private static readonly byte[] CarConnectResponse = [(byte)ACServerProtocol.CarConnect];
     private readonly byte[] _lobbyCheckResponse;
 
     public ACUdpServer(SessionManager sessionManager,
         ACServerConfiguration configuration,
         EntryCarManager entryCarManager,
-        IHostApplicationLifetime applicationLifetime,
-        CSPClientMessageHandler clientMessageHandler) : base(applicationLifetime)
+        CSPClientMessageHandler clientMessageHandler)
     {
         _sessionManager = sessionManager;
         _configuration = configuration;
@@ -72,11 +70,7 @@ public class ACUdpServer : CriticalBackgroundService
                 var bytesRead = _socket.ReceiveFrom(buffer, SocketFlags.None, address);
                 OnReceived(address, buffer, bytesRead);
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-            {
-                // This is a workaround because on Linux, the SocketAddress Size will be set to 0 for some reason
-                address.Size = address.Buffer.Length;
-            }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut) { }
             catch (Exception ex)
             {
                 Log.Error(ex, "Error in UDP receive loop");
@@ -143,19 +137,24 @@ public class ACUdpServer : CriticalBackgroundService
                 }
                 else if (packetId == ACServerProtocol.PositionUpdate)
                 {
+                    // Pass checksum first before sending first update + welcome message.
+                    // Plugins might rely on checksums to generate CSP extra options
+                    if (client.ChecksumStatus != ChecksumStatus.Succeeded) return;
+                    
                     if (!client.HasSentFirstUpdate)
                         client.SendFirstUpdate();
                     
-                    if (client.ChecksumStatus != ChecksumStatus.Succeeded
-                        || client.SecurityLevel < _configuration.Extra.MandatoryClientSecurityLevel) return;
+                    if (client.SecurityLevel < _configuration.Extra.MandatoryClientSecurityLevel) return;
 
                     car.UpdatePosition(packetReader.Read<PositionUpdateIn>());
                 }
                 else if (packetId == ACServerProtocol.PingPong)
                 {
+                    var packet = packetReader.ReadPacket<PingResponse>();
+                    
                     long currentTime = _sessionManager.ServerTimeMilliseconds;
-                    car.Ping = (ushort)(currentTime - packetReader.Read<int>());
-                    car.TimeOffset = (int)currentTime - ((car.Ping / 2) + packetReader.Read<int>());
+                    car.Ping = (ushort)(currentTime - packet.Time);
+                    car.TimeOffset = (int)currentTime - ((car.Ping / 2) + packet.ClientTime);
                     car.LastPongTime = currentTime;
                 }
                 else if (_configuration.Extra.EnableUdpClientMessages && packetId == ACServerProtocol.Extended)
