@@ -10,4 +10,5 @@ public class ReverseProxyConfiguration : IValidateConfiguration<ReverseProxyConf
     public ushort ReverseHttpPort { get; init; }
     public ushort ReverseUdpPort { get; init; }
     public ushort ReverseTcpPort { get; init; }
+    public string? LobbyRelayUrl { get; init; }
 }

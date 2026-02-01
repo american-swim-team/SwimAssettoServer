@@ -1,7 +1,6 @@
+using System;
 using FluentValidation;
 using JetBrains.Annotations;
-using Serilog;
-using System.Text;
 
 namespace ReverseProxyPlugin;
 
@@ -14,5 +13,9 @@ public class ReverseProxyConfigurationValidator : AbstractValidator<ReverseProxy
         RuleFor(x => x.ReverseHttpPort).NotEmpty();
         RuleFor(x => x.ReverseUdpPort).NotEmpty();
         RuleFor(x => x.ReverseTcpPort).NotEmpty();
+        RuleFor(x => x.LobbyRelayUrl)
+            .Must(url => Uri.TryCreate(url, UriKind.Absolute, out _))
+            .When(x => !string.IsNullOrEmpty(x.LobbyRelayUrl))
+            .WithMessage("LobbyRelayUrl must be a valid absolute URL");
     }
 }
