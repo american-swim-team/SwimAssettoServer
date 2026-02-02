@@ -107,14 +107,11 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
     [YamlMember(Description = "Time horizon in seconds for player position prediction during lane change safety checks")]
     public float LaneChangeTimeHorizonSeconds { get; set; } = 2.0f;
 
-    [YamlMember(Description = "Distance multiplier to trigger overtake lane change")]
-    public float LaneChangeOvertakeTriggerMultiplier { get; set; } = 1.5f;
+    [YamlMember(Description = "Check behind for approaching players before lane change (prevents merging into faster players)")]
+    public bool LaneChangeCheckBehindForPlayers { get; set; } = true;
 
-    [YamlMember(Description = "Distance multiplier for when to return to right/slow lane")]
-    public float LaneChangeReturnToRightMultiplier { get; set; } = 2.0f;
-
-    [YamlMember(Description = "Probability per tick for spontaneous lane change (0.0-1.0)")]
-    public float LaneChangeSpontaneousProbability { get; set; } = 0.001f;
+    [YamlMember(Description = "How far behind to check for approaching players during lane change (meters)")]
+    public float LaneChangePlayerLookBehindMeters { get; set; } = 50f;
 
     [YamlMember(Description = "Distance after lane change to keep indicator on (meters)")]
     public float LaneChangeIndicatorClearDistanceMeters { get; set; } = 20.0f;
@@ -124,6 +121,23 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
 
     [YamlMember(Description = "Maximum speed factor for lane change distance calculation")]
     public float LaneChangeSpeedFactorMax { get; set; } = 1.5f;
+
+    // IDM Brain Configuration
+    [YamlMember(Description = "IDM base time headway in seconds (target following time gap)")]
+    public float IdmBaseTimeHeadwaySeconds { get; set; } = 1.5f;
+
+    [YamlMember(Description = "IDM minimum jam gap in meters (minimum distance when stopped)")]
+    public float IdmMinGapMeters { get; set; } = 2.0f;
+
+    // Personality configuration (simplified)
+    [YamlMember(Description = "Personality variation (0 = identical drivers, 1 = maximum variety)")]
+    public float PersonalityVariety { get; set; } = 0.3f;
+
+    [YamlMember(Description = "Personality bias (-1 = all passive/cautious, 0 = neutral, +1 = all aggressive)")]
+    public float PersonalityBias { get; set; } = 0.0f;
+
+    [YamlMember(Description = "Overtake desire threshold - lane change triggers when desire exceeds this value (0-1)")]
+    public float OvertakeDesireThreshold { get; set; } = 0.5f;
 
     [ObservableProperty]
     [property: YamlMember(Description = "AI cornering speed factor. Lower = AI cars will drive slower around corners.")]
@@ -141,7 +155,15 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
     public string NamePrefix { get; init; } = "Traffic";
     [YamlMember(Description = "Ignore obstacles for some time if the AI car is stopped for longer than x seconds")]
     public int IgnoreObstaclesAfterSeconds { get; set; } = 10;
-    
+    [YamlMember(Description = "Duration of 'ignore obstacles' mode after timeout (seconds)")]
+    public int IgnoreModeDurationSeconds { get; set; } = 10;
+    [YamlMember(Description = "Extra lookahead buffer beyond braking distance (meters)")]
+    public float LookaheadBufferMeters { get; set; } = 20f;
+    [YamlMember(Description = "Angle range for detecting player obstacles behind AI (degrees from 180, so 14 means 166-194 degrees)")]
+    public float PlayerDetectionAngleRange { get; set; } = 14f;
+    [YamlMember(Description = "Height difference threshold for player obstacle detection (meters)")]
+    public float PlayerDetectionHeightThreshold { get; set; } = 1.5f;
+
     [ObservableProperty]
     [property: YamlMember(Description = "Apply scale to some traffic density related settings. Increasing this DOES NOT magically increase your traffic density, it is dependent on your other settings. Values higher than 1 not recommended.", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     private float _trafficDensity = 1.0f;
@@ -187,6 +209,7 @@ public partial class TrafficAiConfiguration : ObservableObject, IValidateConfigu
     [YamlIgnore] public int AiBehaviorUpdateIntervalMilliseconds => 1000 / AiBehaviorUpdateIntervalHz;
     [YamlIgnore] public float LaneChangeSpeedThresholdMs => LaneChangeSpeedThresholdKph / 3.6f;
     [YamlIgnore] public int LaneChangeCooldownMilliseconds => (int)(LaneChangeCooldownSeconds * 1000);
+    [YamlIgnore] public int IgnoreModeDurationMilliseconds => IgnoreModeDurationSeconds * 1000;
 
     internal void ApplyConfigurationFixes(ACServerConfiguration serverConfiguration)
     {

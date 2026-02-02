@@ -10,7 +10,23 @@ public class SlowestAiStates
         _aiStates = new AiState?[numPoints];
     }
 
-    public AiState? this[int index] => _aiStates[index];
+    public AiState? this[int index]
+    {
+        get
+        {
+            var state = _aiStates[index];
+            if (state == null) return null;
+
+            // Valid: car is at this point
+            if (state.CurrentSplinePointId == index) return state;
+
+            // Valid: car is lane-changing (intentionally registered in target lane)
+            if (state.IsCurrentlyLaneChanging) return state;
+
+            // Stale: car moved forward but old registration wasn't cleaned
+            return null;
+        }
+    }
 
     public void Enter(int pointId, AiState state)
     {

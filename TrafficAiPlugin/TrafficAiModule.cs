@@ -3,6 +3,7 @@ using AssettoServer.Server.OpenSlotFilters;
 using AssettoServer.Server.Plugin;
 using Autofac;
 using Microsoft.Extensions.Hosting;
+using TrafficAiPlugin.Brain;
 using TrafficAiPlugin.Configuration;
 using TrafficAiPlugin.Shared;
 using TrafficAiPlugin.Splines;
@@ -18,6 +19,7 @@ public class TrafficAiModule : AssettoServerModule<TrafficAiConfiguration>
         builder.RegisterType<EntryCarTrafficAi>().AsSelf().As<IEntryCarTrafficAi>();
         
         builder.RegisterType<AiState>().AsSelf().As<IAiState>();
+        builder.RegisterType<PersonalityFactory>().AsSelf().SingleInstance();
 
         builder.RegisterType<AiBehavior>().AsSelf().As<IHostedService>().SingleInstance();
         builder.RegisterType<TrafficAiUpdater>().AsSelf().SingleInstance().AutoActivate();

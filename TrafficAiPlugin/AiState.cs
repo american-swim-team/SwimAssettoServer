@@ -10,6 +10,7 @@ using AssettoServer.Utils;
 using JPBotelho;
 using Serilog;
 using SunCalcNet.Model;
+using TrafficAiPlugin.Brain;
 using TrafficAiPlugin.Configuration;
 using TrafficAiPlugin.Shared;
 using TrafficAiPlugin.Shared.Splines;
@@ -48,6 +49,12 @@ public class AiState : IAiState, IDisposable
     public float ClosestAiObstacleDistance { get; private set; }
     public EntryCarTrafficAi EntryCarAi { get; }
 
+    // Expose lane change state for collision detection by other cars
+    public bool IsCurrentlyLaneChanging => _laneChange.IsChangingLane;
+    public int LaneChangeSourcePointId => _laneChange.SourcePointId;
+    public int LaneChangeTargetPointId => _laneChange.TargetPointId;
+    public bool IsLaneChangeOvertake => _laneChange.IsOvertake;
+
     private const float WalkingSpeed = 10 / 3.6f;
 
     private Vector3 _startTangent;
@@ -73,8 +80,13 @@ public class AiState : IAiState, IDisposable
     // Lane change state
     private readonly LaneChangeState _laneChange = new();
     private long _lastLaneChangeAttempt;
-    private long _laneChangeCompletedAt;
     private int _laneChangeSourcePointId = -1; // For dual SlowestAiStates tracking during lane change
+    private int _laneChangeTargetRegistrationPointId = -1; // Track where we registered in target lane (adjacent point)
+
+    // IDM brain state
+    private DriverPersonality _personality;
+    private float _desiredSpeed;
+    private float _lastOvertakeDesire;
 
     private readonly ACServerConfiguration _serverConfiguration;
     private readonly TrafficAiConfiguration _configuration;
@@ -84,6 +96,7 @@ public class AiState : IAiState, IDisposable
     private readonly AiSpline _spline;
     private readonly TrafficAi _trafficAi;
     private readonly JunctionEvaluator _junctionEvaluator;
+    private readonly PersonalityFactory _personalityFactory;
 
     private static readonly List<Color> CarColors =
     [
@@ -114,7 +127,8 @@ public class AiState : IAiState, IDisposable
         TrafficAiConfiguration configuration,
         EntryCarManager entryCarManager,
         AiSpline spline,
-        TrafficAi trafficAi)
+        TrafficAi trafficAi,
+        PersonalityFactory personalityFactory)
     {
         EntryCarAi = entryCarAi;
         _sessionManager = sessionManager;
@@ -125,6 +139,7 @@ public class AiState : IAiState, IDisposable
         _spline = spline;
         _trafficAi = trafficAi;
         _junctionEvaluator = new JunctionEvaluator(spline);
+        _personalityFactory = personalityFactory;
 
         _lastTick = _sessionManager.ServerTimeMilliseconds;
     }
@@ -150,6 +165,13 @@ public class AiState : IAiState, IDisposable
         {
             _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
             _laneChangeSourcePointId = -1;
+        }
+
+        // Clean up target lane registration point if mid-lane-change
+        if (_laneChangeTargetRegistrationPointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChangeTargetRegistrationPointId, this);
+            _laneChangeTargetRegistrationPointId = -1;
         }
 
         if (_laneChange.IsChangingLane)
@@ -188,9 +210,19 @@ public class AiState : IAiState, IDisposable
         _currentVecProgress = 0;
             
         CalculateTangents();
-        
+
         SetRandomSpeed();
-        SetRandomColor();
+
+        // Only set random color on first spawn to avoid color changes on respawn
+        if (SpawnCounter == 0)
+        {
+            SetRandomColor();
+        }
+
+        // Assign personality at spawn
+        _personality = _personalityFactory.Create();
+        _desiredSpeed = InitialMaxSpeed * _personality.DesiredSpeedFactor;
+        _lastOvertakeDesire = 0;
 
         var minDist = _configuration.MinAiSafetyDistanceSquared;
         var maxDist = _configuration.MaxAiSafetyDistanceSquared;
@@ -219,8 +251,8 @@ public class AiState : IAiState, IDisposable
         _endIndicatorDistance = 0;
         _lastTick = _sessionManager.ServerTimeMilliseconds;
         _lastLaneChangeAttempt = 0;
-        _laneChangeCompletedAt = 0;
         _laneChangeSourcePointId = -1;
+        _laneChangeTargetRegistrationPointId = -1;
         if (_laneChange.IsChangingLane)
         {
             _laneChange.Abort();
@@ -378,7 +410,7 @@ public class AiState : IAiState, IDisposable
         var points = _spline.Points;
         var junctions = _spline.Junctions;
         
-        float maxBrakingDistance = PhysicsUtils.CalculateBrakingDistance(CurrentSpeed, EntryCarAi.AiDeceleration) * 2 + 20;
+        float maxBrakingDistance = PhysicsUtils.CalculateBrakingDistance(CurrentSpeed, EntryCarAi.AiDeceleration) * 2 + _configuration.LookaheadBufferMeters;
         AiState? closestAiState = null;
         float closestAiStateDistance = float.MaxValue;
         bool junctionFound = false;
@@ -514,9 +546,12 @@ public class AiState : IAiState, IDisposable
                 {
                     float distance = Vector3.DistanceSquared(playerCar.Status.Position, Status.Position);
 
+                    float minAngle = 180 - _configuration.PlayerDetectionAngleRange;
+                    float maxAngle = 180 + _configuration.PlayerDetectionAngleRange;
+                    float angle = GetAngleToCar(playerCar.Status);
                     if (distance < minDistance
-                        && Math.Abs(playerCar.Status.Position.Y - Status.Position.Y) < 1.5
-                        && GetAngleToCar(playerCar.Status) is > 166 and < 194)
+                        && Math.Abs(playerCar.Status.Position.Y - Status.Position.Y) < _configuration.PlayerDetectionHeightThreshold
+                        && angle > minAngle && angle < maxAngle)
                     {
                         minDistance = distance;
                         closestCar = playerCar;
@@ -569,73 +604,169 @@ public class AiState : IAiState, IDisposable
     public void DetectObstacles()
     {
         if (!Initialized) return;
-            
+        DetectObstaclesIdm();
+    }
+
+    private void DetectObstaclesIdm()
+    {
         if (_sessionManager.ServerTimeMilliseconds < _ignoreObstaclesUntil)
         {
-            SetTargetSpeed(MaxSpeed);
+            // Still check for emergency collision avoidance with AI cars
+            var emergencyLookahead = SplineLookahead();
+            var emergencyPlayerObstacle = FindClosestPlayerObstacle();
+            float closestObstacle = Math.Min(emergencyLookahead.ClosestAiStateDistance, emergencyPlayerObstacle.distance);
+
+            if (closestObstacle < _minObstacleDistance * 2)
+            {
+                // Emergency brake even when ignoring obstacles
+                Acceleration = -EntryCarAi.AiDeceleration;
+                TargetSpeed = 0;
+                return;
+            }
+
+            // Otherwise continue accelerating
+            Acceleration = EntryCarAi.AiAcceleration * _personality.AccelerationFactor;
             return;
         }
 
         if (_sessionManager.ServerTimeMilliseconds < _stoppedForCollisionUntil)
         {
-            SetTargetSpeed(0);
+            Acceleration = -EntryCarAi.AiDeceleration * _personality.DecelerationFactor;
+            TargetSpeed = 0;
             return;
         }
-            
-        float targetSpeed = InitialMaxSpeed;
-        float maxSpeed = InitialMaxSpeed;
-        bool hasObstacle = false;
 
         var splineLookahead = SplineLookahead();
         var playerObstacle = FindClosestPlayerObstacle();
 
         ClosestAiObstacleDistance = splineLookahead.ClosestAiState != null ? splineLookahead.ClosestAiStateDistance : -1;
 
-        // Consider lane change if blocked by slower traffic
-        if (!_laneChange.IsChangingLane)
-        {
-            ConsiderLaneChange(splineLookahead.ClosestAiState, splineLookahead.ClosestAiStateDistance);
-        }
+        // Calculate desired speed considering road/cornering limits and personality
+        _desiredSpeed = IdmBrain.CalculateDesiredSpeed(
+            InitialMaxSpeed,
+            splineLookahead.MaxSpeed,
+            in _personality);
 
-        if (playerObstacle.distance < _minObstacleDistance || splineLookahead.ClosestAiStateDistance < _minObstacleDistance)
-        {
-            targetSpeed = 0;
-            hasObstacle = true;
-        }
-        else if (playerObstacle.distance < splineLookahead.ClosestAiStateDistance && playerObstacle.entryCar != null)
-        {
-            float playerSpeed = playerObstacle.entryCar.Status.Velocity.Length();
+        // Find closest obstacle (player or AI)
+        float obstacleDistance;
+        float obstacleSpeed;
 
-            if (playerSpeed < 0.1f)
-            {
-                playerSpeed = 0;
-            }
-
-            if ((playerSpeed < CurrentSpeed || playerSpeed == 0)
-                && playerObstacle.distance < PhysicsUtils.CalculateBrakingDistance(CurrentSpeed - playerSpeed, EntryCarAi.AiDeceleration) * 2 + 20)
-            {
-                targetSpeed = Math.Max(WalkingSpeed, playerSpeed);
-                hasObstacle = true;
-            }
+        if (playerObstacle.distance < splineLookahead.ClosestAiStateDistance && playerObstacle.entryCar != null)
+        {
+            obstacleDistance = playerObstacle.distance;
+            obstacleSpeed = playerObstacle.entryCar.Status.Velocity.Length();
+            if (obstacleSpeed < 0.1f) obstacleSpeed = 0;
         }
         else if (splineLookahead.ClosestAiState != null)
         {
-            float closestTargetSpeed = Math.Min(splineLookahead.ClosestAiState.CurrentSpeed, splineLookahead.ClosestAiState.TargetSpeed);
-            if ((closestTargetSpeed < CurrentSpeed || splineLookahead.ClosestAiState.CurrentSpeed == 0)
-                && splineLookahead.ClosestAiStateDistance < PhysicsUtils.CalculateBrakingDistance(CurrentSpeed - closestTargetSpeed, EntryCarAi.AiDeceleration) * 2 + 20)
-            {
-                targetSpeed = Math.Max(WalkingSpeed, closestTargetSpeed);
-                hasObstacle = true;
-            }
+            obstacleDistance = splineLookahead.ClosestAiStateDistance;
+            obstacleSpeed = Math.Min(splineLookahead.ClosestAiState.CurrentSpeed, splineLookahead.ClosestAiState.TargetSpeed);
+        }
+        else
+        {
+            obstacleDistance = float.MaxValue;
+            obstacleSpeed = 0;
         }
 
-        targetSpeed = Math.Min(splineLookahead.MaxSpeed, targetSpeed);
+        // Only use IDM car-following if there's actual collision risk:
+        // 1. Obstacle is close (within reasonable following distance), OR
+        // 2. We might catch up (going faster or similar speed), OR
+        // 3. Obstacle is very close
+        bool shouldFollowObstacle = obstacleDistance < float.MaxValue &&
+            (obstacleDistance < _configuration.IdmBaseTimeHeadwaySeconds * CurrentSpeed * 3 ||
+             CurrentSpeed >= obstacleSpeed - 2.0f ||  // We're faster or similar speed
+             obstacleDistance < _minObstacleDistance * 3);  // Very close
+
+        if (!shouldFollowObstacle)
+        {
+            // No relevant obstacle - just accelerate toward desired speed (free-flow)
+            obstacleDistance = float.MaxValue;
+            obstacleSpeed = CurrentSpeed;  // Neutral - no closing
+        }
+
+        // Emergency stop for very close obstacles
+        if (obstacleDistance < _minObstacleDistance)
+        {
+            Acceleration = -EntryCarAi.AiDeceleration * 2.0f;
+            TargetSpeed = 0;
+            HandleStoppedForObstacle();
+            return;
+        }
+
+        // Calculate IDM acceleration
+        float idmAcceleration = IdmBrain.CalculateAcceleration(
+            CurrentSpeed,
+            _desiredSpeed,
+            obstacleDistance,
+            obstacleSpeed,
+            in _personality,
+            _configuration,
+            EntryCarAi.AiAcceleration,
+            EntryCarAi.AiDeceleration);
+
+        Acceleration = idmAcceleration;
+        TargetSpeed = idmAcceleration >= 0 ? _desiredSpeed : Math.Max(0, obstacleSpeed);
+        MaxSpeed = InitialMaxSpeed;
+
+        // Consider lane change using overtake desire
+        if (!_laneChange.IsChangingLane)
+        {
+            ConsiderLaneChange(obstacleDistance, obstacleSpeed);
+        }
+
+        HandleStoppedForObstacle();
+    }
+
+    private void ConsiderLaneChange(float obstacleDistance, float obstacleSpeed)
+    {
+        if (!_configuration.EnableLaneChanging) return;
+        if (_nextJunctionId >= 0) return;
+
+        long currentTime = _sessionManager.ServerTimeMilliseconds;
+        if (currentTime - _lastLaneChangeAttempt < _configuration.LaneChangeCooldownMilliseconds)
+            return;
+
+        var points = _spline.Points;
+        ref readonly var currentPoint = ref points[CurrentSplinePointId];
+
+        // Calculate overtake desire
+        _lastOvertakeDesire = IdmBrain.CalculateOvertakeDesire(
+            CurrentSpeed,
+            _desiredSpeed,
+            obstacleDistance,
+            obstacleSpeed,
+            in _personality,
+            _configuration);
+
+        // Threshold for overtake scaled by aggressiveness
+        float threshold = _configuration.OvertakeDesireThreshold / _personality.Aggressiveness;
+
+        // Overtake if desire exceeds threshold - try left first, then right
+        if (_lastOvertakeDesire > threshold)
+        {
+            _lastLaneChangeAttempt = currentTime;
+
+            // Prefer left (fast lane)
+            if (currentPoint.LeftId >= 0 && TryInitiateLaneChange(currentPoint.LeftId, true))
+                return;
+            // Fall back to right if left unavailable or blocked
+            if (currentPoint.RightId >= 0 && TryInitiateLaneChange(currentPoint.RightId, false))
+                return;
+        }
+    }
+
+    private void HandleStoppedForObstacle()
+    {
+        // Adjust honk timing based on patience
+        int baseHonkDelay = (int)(3000 * _personality.Patience);
+        int honkDelayVariation = (int)(4000 * _personality.Patience);
+        int ignoreTimeout = (int)(_configuration.IgnoreObstaclesAfterMilliseconds * _personality.Patience);
 
         if (CurrentSpeed == 0 && !_stoppedForObstacle)
         {
             _stoppedForObstacle = true;
             _stoppedForObstacleSince = _sessionManager.ServerTimeMilliseconds;
-            _obstacleHonkStart = _stoppedForObstacleSince + Random.Shared.Next(3000, 7000);
+            _obstacleHonkStart = _stoppedForObstacleSince + Random.Shared.Next(baseHonkDelay, baseHonkDelay + honkDelayVariation);
             _obstacleHonkEnd = _obstacleHonkStart + Random.Shared.Next(500, 1500);
             Log.Verbose("AI {SessionId} stopped for obstacle", EntryCarAi.EntryCar.SessionId);
         }
@@ -644,20 +775,11 @@ public class AiState : IAiState, IDisposable
             _stoppedForObstacle = false;
             Log.Verbose("AI {SessionId} no longer stopped for obstacle", EntryCarAi.EntryCar.SessionId);
         }
-        else if (_stoppedForObstacle && _sessionManager.ServerTimeMilliseconds - _stoppedForObstacleSince > _configuration.IgnoreObstaclesAfterMilliseconds)
+        else if (_stoppedForObstacle && _sessionManager.ServerTimeMilliseconds - _stoppedForObstacleSince > ignoreTimeout)
         {
-            _ignoreObstaclesUntil = _sessionManager.ServerTimeMilliseconds + 10_000;
+            _ignoreObstaclesUntil = _sessionManager.ServerTimeMilliseconds + _configuration.IgnoreModeDurationMilliseconds;
             Log.Verbose("AI {SessionId} ignoring obstacles until {IgnoreObstaclesUntil}", EntryCarAi.EntryCar.SessionId, _ignoreObstaclesUntil);
         }
-
-        float deceleration = EntryCarAi.AiDeceleration;
-        if (!hasObstacle)
-        {
-            deceleration *= EntryCarAi.AiCorneringBrakeForceFactor;
-        }
-        
-        MaxSpeed = maxSpeed;
-        SetTargetSpeed(targetSpeed, deceleration, EntryCarAi.AiAcceleration);
     }
 
     public void StopForCollision()
@@ -689,7 +811,12 @@ public class AiState : IAiState, IDisposable
         float lookBehindDistance = _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeLookBehindMultiplier;
         float timeHorizon = _configuration.LaneChangeTimeHorizonSeconds;
 
-        // Look ahead in target lane - check for slower AI blocking
+        // Minimum safe distance - never merge if someone is this close
+        float minSafeDistance = _configuration.LaneChangeMinDistanceMeters * 0.5f;
+        // Extended safe distance for cars that are also lane changing
+        float laneChangeSafeDistance = _configuration.LaneChangeMaxDistanceMeters;
+
+        // Look ahead in target lane - check for AI blocking
         float distanceAhead = 0;
         int checkPointId = targetPointId;
         while (distanceAhead < lookAheadDistance && checkPointId >= 0)
@@ -697,7 +824,31 @@ public class AiState : IAiState, IDisposable
             var slowest = _spline.SlowestAiStates[checkPointId];
             if (slowest != null && slowest != this)
             {
-                // Someone is ahead in target lane
+                // Calculate actual physical distance
+                float physicalDistance = Vector3.Distance(Status.Position, slowest.Status.Position);
+
+                // Always reject if too close, regardless of speed
+                if (physicalDistance < minSafeDistance)
+                {
+                    return false;
+                }
+
+                // If they're also lane changing, check for collision course
+                if (slowest.IsCurrentlyLaneChanging)
+                {
+                    // If they're lane changing toward our current lane (opposite direction), definite collision
+                    if (slowest.IsLaneChangeOvertake != isOvertake && physicalDistance < laneChangeSafeDistance * 1.5f)
+                    {
+                        return false;
+                    }
+                    // Any lane change nearby is dangerous
+                    if (physicalDistance < laneChangeSafeDistance)
+                    {
+                        return false;
+                    }
+                }
+
+                // Someone is ahead in target lane - check speed
                 float theirSpeed = Math.Min(slowest.CurrentSpeed, slowest.TargetSpeed);
                 if (theirSpeed < CurrentSpeed - _configuration.LaneChangeSpeedThresholdMs * 0.5f)
                 {
@@ -718,7 +869,31 @@ public class AiState : IAiState, IDisposable
             var slowest = _spline.SlowestAiStates[checkPointId];
             if (slowest != null && slowest != this)
             {
-                // Someone is behind in target lane
+                // Calculate actual physical distance
+                float physicalDistance = Vector3.Distance(Status.Position, slowest.Status.Position);
+
+                // Always reject if too close, regardless of speed
+                if (physicalDistance < minSafeDistance)
+                {
+                    return false;
+                }
+
+                // If they're also lane changing, check for collision course
+                if (slowest.IsCurrentlyLaneChanging)
+                {
+                    // If they're lane changing toward our current lane (opposite direction), definite collision
+                    if (slowest.IsLaneChangeOvertake != isOvertake && physicalDistance < laneChangeSafeDistance * 1.5f)
+                    {
+                        return false;
+                    }
+                    // Any lane change nearby is dangerous
+                    if (physicalDistance < laneChangeSafeDistance)
+                    {
+                        return false;
+                    }
+                }
+
+                // Someone is behind in target lane - check speed
                 float theirSpeed = slowest.CurrentSpeed;
                 if (theirSpeed > CurrentSpeed + _configuration.LaneChangeSpeedThresholdMs)
                 {
@@ -729,6 +904,30 @@ public class AiState : IAiState, IDisposable
 
             distanceBehind += points[checkPointId].Length;
             checkPointId = points[checkPointId].PreviousId;
+        }
+
+        // Check our current lane for cars also lane changing to the same target (parallel merge collision)
+        float distanceInCurrentLane = 0;
+        checkPointId = CurrentSplinePointId;
+        while (distanceInCurrentLane < lookAheadDistance && checkPointId >= 0)
+        {
+            var slowest = _spline.SlowestAiStates[checkPointId];
+            if (slowest != null && slowest != this && slowest.IsCurrentlyLaneChanging)
+            {
+                // Check if they're lane changing in the same direction (both left or both right)
+                // isOvertake = true means going left, false means going right
+                if (slowest.IsLaneChangeOvertake == isOvertake)
+                {
+                    // They're targeting the same lane, too dangerous if close
+                    float physicalDistance = Vector3.Distance(Status.Position, slowest.Status.Position);
+                    if (physicalDistance < laneChangeSafeDistance)
+                    {
+                        return false;
+                    }
+                }
+            }
+            distanceInCurrentLane += points[checkPointId].Length;
+            checkPointId = points[checkPointId].NextId;
         }
 
         // Check for players in target lane area
@@ -745,62 +944,33 @@ public class AiState : IAiState, IDisposable
                     {
                         return false;
                     }
+
+                    // Check behind for approaching players
+                    if (_configuration.LaneChangeCheckBehindForPlayers)
+                    {
+                        float playerDistance = Vector3.Distance(car.Status.Position, Status.Position);
+                        if (playerDistance < _configuration.LaneChangePlayerLookBehindMeters)
+                        {
+                            // Check if player is behind us and approaching
+                            float angleToPlayer = GetAngleToCar(car.Status);
+                            bool playerIsBehind = angleToPlayer < 90 || angleToPlayer > 270;
+
+                            if (playerIsBehind)
+                            {
+                                float playerSpeed = car.Status.Velocity.Length();
+                                // If player is faster and close behind, don't merge
+                                if (playerSpeed > CurrentSpeed + _configuration.LaneChangeSpeedThresholdMs)
+                                {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
         return true;
-    }
-
-    private void ConsiderLaneChange(AiState? closestObstacle, float obstacleDistance)
-    {
-        if (!_configuration.EnableLaneChanging) return;
-        if (_laneChange.IsChangingLane) return;
-        if (_nextJunctionId >= 0) return; // Don't lane change during junction approach
-
-        long currentTime = _sessionManager.ServerTimeMilliseconds;
-
-        // Check cooldown
-        if (currentTime - _lastLaneChangeAttempt < _configuration.LaneChangeCooldownMilliseconds)
-            return;
-
-        var points = _spline.Points;
-        ref readonly var currentPoint = ref points[CurrentSplinePointId];
-
-        // Trigger 1: Overtake slower traffic ahead (move to left/fast lane)
-        if (closestObstacle != null && obstacleDistance < _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeOvertakeTriggerMultiplier)
-        {
-            float speedDiff = CurrentSpeed - Math.Min(closestObstacle.CurrentSpeed, closestObstacle.TargetSpeed);
-            if (speedDiff > _configuration.LaneChangeSpeedThresholdMs && currentPoint.LeftId >= 0)
-            {
-                _lastLaneChangeAttempt = currentTime;
-                if (TryInitiateLaneChange(currentPoint.LeftId, true))
-                    return;
-            }
-        }
-
-        // Trigger 2: Return to slow lane after overtake (move to right lane)
-        if (currentPoint.RightId >= 0 && currentTime - _laneChangeCompletedAt > _configuration.LaneChangeCooldownMilliseconds * 2)
-        {
-            // Return right if we have no obstacle ahead or obstacle is far away
-            if (closestObstacle == null || obstacleDistance > _configuration.LaneChangeMaxDistanceMeters * _configuration.LaneChangeReturnToRightMultiplier)
-            {
-                _lastLaneChangeAttempt = currentTime;
-                if (TryInitiateLaneChange(currentPoint.RightId, false))
-                    return;
-            }
-        }
-
-        // Trigger 3: Small probability for spontaneous lane change for variety (prefer right/slow lane)
-        if (Random.Shared.NextDouble() < _configuration.LaneChangeSpontaneousProbability && closestObstacle == null)
-        {
-            int targetLane = currentPoint.RightId >= 0 ? currentPoint.RightId : currentPoint.LeftId;
-            if (targetLane >= 0)
-            {
-                _lastLaneChangeAttempt = currentTime;
-                TryInitiateLaneChange(targetLane, currentPoint.LeftId >= 0 && targetLane == currentPoint.LeftId);
-            }
-        }
     }
 
     private bool TryInitiateLaneChange(int targetPointId, bool isOvertake)
@@ -850,6 +1020,7 @@ public class AiState : IAiState, IDisposable
 
         // Register in target lane for collision avoidance (source lane already tracked via CurrentSplinePointId)
         _laneChangeSourcePointId = CurrentSplinePointId;
+        _laneChangeTargetRegistrationPointId = targetPointId; // Track the adjacent point we're registering at
         _spline.SlowestAiStates.Enter(targetPointId, this);
 
         // Begin lane change
@@ -881,6 +1052,13 @@ public class AiState : IAiState, IDisposable
         {
             _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
             _laneChangeSourcePointId = -1;
+        }
+
+        // Leave the target lane registration from initiation (the adjacent point, not the end point)
+        if (_laneChangeTargetRegistrationPointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChangeTargetRegistrationPointId, this);
+            _laneChangeTargetRegistrationPointId = -1;
         }
 
         // Update current point to target lane
@@ -920,7 +1098,6 @@ public class AiState : IAiState, IDisposable
         InitialMaxSpeed += speedAdjustment;
         MaxSpeed = Math.Max(MaxSpeed, InitialMaxSpeed);
 
-        _laneChangeCompletedAt = _sessionManager.ServerTimeMilliseconds;
         _laneChange.Complete();
 
         Log.Verbose("AI {SessionId} completed lane change to point {TargetPoint}", EntryCarAi.EntryCar.SessionId, targetPointId);
@@ -930,10 +1107,11 @@ public class AiState : IAiState, IDisposable
     {
         if (!_laneChange.IsChangingLane) return;
 
-        // Leave the target lane registration we made when initiating
-        if (_laneChange.TargetPointId >= 0)
+        // Leave the target lane registration from initiation (the adjacent point, not the end point)
+        if (_laneChangeTargetRegistrationPointId >= 0)
         {
-            _spline.SlowestAiStates.Leave(_laneChange.TargetPointId, this);
+            _spline.SlowestAiStates.Leave(_laneChangeTargetRegistrationPointId, this);
+            _laneChangeTargetRegistrationPointId = -1;
         }
 
         // Clean up source point tracking
@@ -943,6 +1121,9 @@ public class AiState : IAiState, IDisposable
             _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
             _laneChangeSourcePointId = -1;
         }
+
+        // Reset junction evaluator to avoid stale state causing despawn
+        _junctionEvaluator.Clear();
 
         _indicator = 0;
         _laneChange.Abort();
@@ -962,28 +1143,6 @@ public class AiState : IAiState, IDisposable
         challengedAngle %= 360;
 
         return challengedAngle;
-    }
-
-    private void SetTargetSpeed(float speed, float deceleration, float acceleration)
-    {
-        TargetSpeed = speed;
-        if (speed < CurrentSpeed)
-        {
-            Acceleration = -deceleration;
-        }
-        else if (speed > CurrentSpeed)
-        {
-            Acceleration = acceleration;
-        }
-        else
-        {
-            Acceleration = 0;
-        }
-    }
-
-    private void SetTargetSpeed(float speed)
-    {
-        SetTargetSpeed(speed, EntryCarAi.AiDeceleration, EntryCarAi.AiAcceleration);
     }
 
     public void Update()
@@ -1007,6 +1166,9 @@ public class AiState : IAiState, IDisposable
                 Acceleration = 0;
             }
         }
+
+        // Clamp speed to never exceed desired max
+        CurrentSpeed = Math.Min(CurrentSpeed, MaxSpeed);
 
         float moveMeters = (dt / 1000.0f) * CurrentSpeed;
 

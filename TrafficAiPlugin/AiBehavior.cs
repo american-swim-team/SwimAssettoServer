@@ -79,7 +79,17 @@ public class AiBehavior : BackgroundService
             var targetAiState = target.GetClosestAiState(sender.EntryCar.Status.Position);
             if (targetAiState.AiState != null && targetAiState.DistanceSquared < 25 * 25)
             {
-                Task.Delay(Random.Shared.Next(100, 500)).ContinueWith(_ => targetAiState.AiState.StopForCollision());
+                // Capture spawn counter to validate AiState is still valid after delay
+                var aiState = targetAiState.AiState;
+                var spawnCounter = aiState.SpawnCounter;
+                Task.Delay(Random.Shared.Next(100, 500)).ContinueWith(_ =>
+                {
+                    // Only call StopForCollision if the AiState hasn't been replaced/despawned
+                    if (aiState.Initialized && aiState.SpawnCounter == spawnCounter)
+                    {
+                        aiState.StopForCollision();
+                    }
+                });
             }
         }
     }
