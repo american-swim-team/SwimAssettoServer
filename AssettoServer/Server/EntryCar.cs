@@ -40,8 +40,8 @@ public partial class EntryCar : IEntryCar<ACTcpClient>
     public string LegalTyres { get; set; } = "";
 
     public bool IsSpectator { get; internal set; }
-    public string Model { get; }
-    public string Skin { get; }
+    public string Model { get; private set; }
+    public string Skin { get; private set; }
     public int SpectatorMode { get; internal set; }
     public float Ballast { get; internal set; }
     public int Restrictor { get; internal set; }
@@ -155,6 +155,18 @@ public partial class EntryCar : IEntryCar<ACTcpClient>
             MandatoryPit = _configuration.Server.PitWindowStart < _configuration.Server.PitWindowEnd,
         };
         TargetCar = null;
+    }
+
+    /// <summary>
+    /// Configures this slot for a specific car model (used for dynamic car selection)
+    /// </summary>
+    internal void ConfigureForModel(string model, string skin, Configuration.CarModelConfiguration config)
+    {
+        Model = model;
+        Skin = skin;
+        Ballast = config.Ballast;
+        Restrictor = config.Restrictor;
+        LegalTyres = config.LegalTyres ?? _configuration.Server.LegalTyres;
     }
 
     internal void SetActive()

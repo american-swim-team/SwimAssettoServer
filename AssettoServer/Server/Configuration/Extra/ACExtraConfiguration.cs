@@ -110,7 +110,9 @@ public partial class ACExtraConfiguration : ObservableObject
     public List<string>? CorsAllowedOrigins { get; init; }
     [YamlMember(Description = "Allow a user group to execute specific admin commands")]
     public List<UserGroupCommandPermissions>? UserGroupCommandPermissions { get; init; }
-    
+    [YamlMember(Description = "Enable dynamic car selection. Players can join with any car model defined in entry_list.ini. Per-model settings (ballast, restrictor, legal tyres) are taken from the first entry of each model.")]
+    public bool EnableDynamicCarSelection { get; init; } = false;
+
     [YamlIgnore] internal bool ContainsObsoletePluginConfiguration { get; private set; }
 
     public void ToFile(string path)

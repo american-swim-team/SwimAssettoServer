@@ -52,7 +52,9 @@ public class HttpInfoCache : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        Cars = _entryCarManager.EntryCars.Select(c => c.Model).Distinct().ToList();
+        Cars = _entryCarManager.DynamicCarSelection != null
+            ? _entryCarManager.DynamicCarSelection.AllowedModels
+            : _entryCarManager.EntryCars.Select(c => c.Model).Distinct().ToList();
         Country = [_geoParamsManager.GeoParams.Country, _geoParamsManager.GeoParams.CountryCode];
         return Task.CompletedTask;
     }

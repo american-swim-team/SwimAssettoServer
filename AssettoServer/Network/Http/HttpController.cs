@@ -98,19 +98,67 @@ public class HttpController : ControllerBase
         bool guidValid = ulong.TryParse(guid, out ulong ulongGuid);
         bool isAdmin = guidValid && await _adminService.IsAdminAsync(ulongGuid);
 
-        var cars = new List<EntryListResponseCar>(_entryCarManager.EntryCars.Length);
-        foreach (var ec in _entryCarManager.EntryCars)
+        var dynamicSelection = _entryCarManager.DynamicCarSelection;
+        List<EntryListResponseCar> cars;
+
+        if (dynamicSelection != null)
         {
-            cars.Add(new EntryListResponseCar
+            // Dynamic car selection mode: show all allowed models as available
+            // as long as there are free slots
+            cars = [];
+            int freeSlots = _entryCarManager.EntryCars.Length - _entryCarManager.ConnectedCars.Count;
+
+            // First, add all connected players with their actual models
+            foreach (var ec in _entryCarManager.EntryCars.Where(e => e.Client != null))
             {
-                Model = ec.Model,
-                Skin = ec.Skin,
-                IsEntryList = isAdmin || await _openSlotFilter.IsSlotOpen(ec, ulongGuid),
-                DriverName = ec.Client?.Name,
-                DriverTeam = ec.Client?.Team,
-                IsConnected = ec.Client != null
-            });
+                cars.Add(new EntryListResponseCar
+                {
+                    Model = ec.Model,
+                    Skin = ec.Skin,
+                    IsEntryList = false,
+                    DriverName = ec.Client?.Name,
+                    DriverTeam = ec.Client?.Team,
+                    IsConnected = true
+                });
+            }
+
+            // Then, for each allowed model, add virtual free slots
+            // This shows CM that each model has available capacity
+            foreach (var model in dynamicSelection.AllowedModels)
+            {
+                var modelConfig = dynamicSelection.ModelConfigurations[model];
+                for (int i = 0; i < freeSlots; i++)
+                {
+                    cars.Add(new EntryListResponseCar
+                    {
+                        Model = model,
+                        Skin = modelConfig.DefaultSkin,
+                        IsEntryList = true,
+                        DriverName = null,
+                        DriverTeam = null,
+                        IsConnected = false
+                    });
+                }
+            }
         }
+        else
+        {
+            // Static car selection mode (original behavior)
+            cars = new List<EntryListResponseCar>(_entryCarManager.EntryCars.Length);
+            foreach (var ec in _entryCarManager.EntryCars)
+            {
+                cars.Add(new EntryListResponseCar
+                {
+                    Model = ec.Model,
+                    Skin = ec.Skin,
+                    IsEntryList = isAdmin || await _openSlotFilter.IsSlotOpen(ec, ulongGuid),
+                    DriverName = ec.Client?.Name,
+                    DriverTeam = ec.Client?.Team,
+                    IsConnected = ec.Client != null
+                });
+            }
+        }
+
         EntryListResponse responseObj = new EntryListResponse
         {
             Cars = cars,
@@ -127,20 +175,70 @@ public class HttpController : ControllerBase
         bool guidValid = ulong.TryParse(guid, out ulong ulongGuid);
         bool isAdmin = guidValid && await _adminService.IsAdminAsync(ulongGuid);
 
-        var cars = new List<DetailResponseCar>(_entryCarManager.EntryCars.Length);
-        foreach (var ec in _entryCarManager.EntryCars)
+        var dynamicSelection = _entryCarManager.DynamicCarSelection;
+        List<DetailResponseCar> cars;
+
+        if (dynamicSelection != null)
         {
-            cars.Add(new DetailResponseCar
+            // Dynamic car selection mode: show all allowed models as available
+            // as long as there are free slots
+            cars = [];
+            int freeSlots = _entryCarManager.EntryCars.Length - _entryCarManager.ConnectedCars.Count;
+
+            // First, add all connected players with their actual models
+            foreach (var ec in _entryCarManager.EntryCars.Where(e => e.Client != null))
             {
-                Model = ec.Model,
-                Skin = ec.Skin,
-                IsEntryList = isAdmin || await _openSlotFilter.IsSlotOpen(ec, ulongGuid),
-                DriverName = ec.Client?.Name,
-                DriverTeam = ec.Client?.Team,
-                DriverNation = ec.Client?.NationCode,
-                IsConnected = ec.Client != null,
-                ID = ec.Client?.HashedGuid
-            });
+                cars.Add(new DetailResponseCar
+                {
+                    Model = ec.Model,
+                    Skin = ec.Skin,
+                    IsEntryList = false,
+                    DriverName = ec.Client?.Name,
+                    DriverTeam = ec.Client?.Team,
+                    DriverNation = ec.Client?.NationCode,
+                    IsConnected = true,
+                    ID = ec.Client?.HashedGuid
+                });
+            }
+
+            // Then, for each allowed model, add virtual free slots
+            foreach (var model in dynamicSelection.AllowedModels)
+            {
+                var modelConfig = dynamicSelection.ModelConfigurations[model];
+                for (int i = 0; i < freeSlots; i++)
+                {
+                    cars.Add(new DetailResponseCar
+                    {
+                        Model = model,
+                        Skin = modelConfig.DefaultSkin,
+                        IsEntryList = true,
+                        DriverName = null,
+                        DriverTeam = null,
+                        DriverNation = null,
+                        IsConnected = false,
+                        ID = null
+                    });
+                }
+            }
+        }
+        else
+        {
+            // Static car selection mode (original behavior)
+            cars = new List<DetailResponseCar>(_entryCarManager.EntryCars.Length);
+            foreach (var ec in _entryCarManager.EntryCars)
+            {
+                cars.Add(new DetailResponseCar
+                {
+                    Model = ec.Model,
+                    Skin = ec.Skin,
+                    IsEntryList = isAdmin || await _openSlotFilter.IsSlotOpen(ec, ulongGuid),
+                    DriverName = ec.Client?.Name,
+                    DriverTeam = ec.Client?.Team,
+                    DriverNation = ec.Client?.NationCode,
+                    IsConnected = ec.Client != null,
+                    ID = ec.Client?.HashedGuid
+                });
+            }
         }
 
         DetailResponse responseObj = new DetailResponse

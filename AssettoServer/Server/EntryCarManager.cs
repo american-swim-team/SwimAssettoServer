@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,10 +17,26 @@ using Serilog;
 
 namespace AssettoServer.Server;
 
+/// <summary>
+/// Holds state for dynamic car selection mode.
+/// </summary>
+public class DynamicCarSelectionState
+{
+    public required IReadOnlyList<string> AllowedModels { get; init; }
+    public required IReadOnlyDictionary<string, CarModelConfiguration> ModelConfigurations { get; init; }
+    public required string DefaultModel { get; init; }
+    public required string DefaultSkin { get; init; }
+}
+
 public class EntryCarManager
 {
     public EntryCar[] EntryCars { get; private set; } = [];
     public ConcurrentDictionary<int, EntryCar> ConnectedCars { get; } = new();
+
+    /// <summary>
+    /// Dynamic car selection state. Null if dynamic car selection is disabled.
+    /// </summary>
+    public DynamicCarSelectionState? DynamicCarSelection { get; private set; }
 
     private readonly ACServerConfiguration _configuration;
     private readonly IBlacklistService _blacklist;
@@ -183,45 +200,108 @@ public class EntryCarManager
             if (ConnectedCars.Count >= _configuration.Server.MaxClients)
                 return false;
 
-            IEnumerable<EntryCar> candidates;
-
-            // Support for SLOT_INDEX CSP feature. CSP sends "car_model:n" where n is the specific slot index the user wants to connect to.
+            // Parse requested car name and optional slot index
             var slotIndexSeparator = handshakeRequest.RequestedCar.IndexOf(':');
+            string requestedCarName;
+            int? requestedSlotIndex = null;
+
             if (slotIndexSeparator >= 0)
             {
-                var requestedSlotIndex = int.Parse(handshakeRequest.RequestedCar.AsSpan(slotIndexSeparator + 1));
-                var requestedCarName = handshakeRequest.RequestedCar[..slotIndexSeparator];
-                var candidate = EntryCars.Where(c => c.Model == requestedCarName).ElementAtOrDefault(requestedSlotIndex);
-
-                if (candidate == null)
-                {
-                    return false;
-                }
-                
-                candidates = [candidate];
+                requestedSlotIndex = int.Parse(handshakeRequest.RequestedCar.AsSpan(slotIndexSeparator + 1));
+                requestedCarName = handshakeRequest.RequestedCar[..slotIndexSeparator];
             }
             else
             {
-                candidates = EntryCars.Where(c => c.Model == handshakeRequest.RequestedCar);
+                requestedCarName = handshakeRequest.RequestedCar;
             }
 
-            var isAdmin = await _adminService.IsAdminAsync(handshakeRequest.Guid);
-            foreach (var entryCar in candidates.OrderByDescending(x => x.AllowedGuids.Count))
+            IEnumerable<EntryCar> candidates;
+
+            // Dynamic car selection mode
+            if (DynamicCarSelection != null)
             {
-                if (entryCar.Client == null && (isAdmin || await _openSlotFilterChain.Value.IsSlotOpen(entryCar, handshakeRequest.Guid)))
+                // Validate the requested model is allowed
+                if (!DynamicCarSelection.ModelConfigurations.TryGetValue(requestedCarName, out var modelConfig))
                 {
-                    entryCar.Reset();
-                    entryCar.Client = client;
-                    client.EntryCar = entryCar;
-                    client.SessionId = entryCar.SessionId;
-                    client.IsConnected = true;
-                    client.IsAdministrator = isAdmin;
-                    client.Guid = handshakeRequest.Guid;
+                    client.Logger.Information("Requested car model {Model} is not allowed", requestedCarName);
+                    return false;
+                }
 
-                    ConnectedCars[client.SessionId] = entryCar;
+                if (requestedSlotIndex.HasValue)
+                {
+                    // In dynamic mode with slot index, use absolute slot index
+                    var candidate = EntryCars.ElementAtOrDefault(requestedSlotIndex.Value);
+                    if (candidate == null)
+                    {
+                        return false;
+                    }
+                    candidates = [candidate];
+                }
+                else
+                {
+                    // Any available slot
+                    candidates = EntryCars;
+                }
 
-                    ClientConnected?.Invoke(client, EventArgs.Empty);
-                    return true;
+                var isAdmin = await _adminService.IsAdminAsync(handshakeRequest.Guid);
+                foreach (var entryCar in candidates.OrderByDescending(x => x.AllowedGuids.Count))
+                {
+                    if (entryCar.Client == null && (isAdmin || await _openSlotFilterChain.Value.IsSlotOpen(entryCar, handshakeRequest.Guid)))
+                    {
+                        entryCar.Reset();
+
+                        // Configure slot for the requested model
+                        entryCar.ConfigureForModel(requestedCarName, modelConfig.DefaultSkin ?? "", modelConfig);
+
+                        entryCar.Client = client;
+                        client.EntryCar = entryCar;
+                        client.SessionId = entryCar.SessionId;
+                        client.IsConnected = true;
+                        client.IsAdministrator = isAdmin;
+                        client.Guid = handshakeRequest.Guid;
+
+                        ConnectedCars[client.SessionId] = entryCar;
+
+                        ClientConnected?.Invoke(client, EventArgs.Empty);
+                        return true;
+                    }
+                }
+            }
+            else
+            {
+                // Static car selection mode (original behavior)
+                if (requestedSlotIndex.HasValue)
+                {
+                    var candidate = EntryCars.Where(c => c.Model == requestedCarName).ElementAtOrDefault(requestedSlotIndex.Value);
+                    if (candidate == null)
+                    {
+                        return false;
+                    }
+                    candidates = [candidate];
+                }
+                else
+                {
+                    candidates = EntryCars.Where(c => c.Model == requestedCarName);
+                }
+
+                var isAdmin = await _adminService.IsAdminAsync(handshakeRequest.Guid);
+                foreach (var entryCar in candidates.OrderByDescending(x => x.AllowedGuids.Count))
+                {
+                    if (entryCar.Client == null && (isAdmin || await _openSlotFilterChain.Value.IsSlotOpen(entryCar, handshakeRequest.Guid)))
+                    {
+                        entryCar.Reset();
+                        entryCar.Client = client;
+                        client.EntryCar = entryCar;
+                        client.SessionId = entryCar.SessionId;
+                        client.IsConnected = true;
+                        client.IsAdministrator = isAdmin;
+                        client.Guid = handshakeRequest.Guid;
+
+                        ConnectedCars[client.SessionId] = entryCar;
+
+                        ClientConnected?.Invoke(client, EventArgs.Empty);
+                        return true;
+                    }
                 }
             }
         }
@@ -241,6 +321,40 @@ public class EntryCarManager
     {
         EntryCars = new EntryCar[Math.Min(_configuration.Server.MaxClients, _configuration.EntryList.Cars.Count)];
         Log.Information("Loaded {Count} cars", EntryCars.Length);
+
+        // Build dynamic car selection state if enabled
+        if (_configuration.Extra.EnableDynamicCarSelection)
+        {
+            var modelConfigs = new Dictionary<string, CarModelConfiguration>();
+            foreach (var entry in _configuration.EntryList.Cars)
+            {
+                if (!modelConfigs.ContainsKey(entry.Model))
+                {
+                    modelConfigs[entry.Model] = new CarModelConfiguration
+                    {
+                        Model = entry.Model,
+                        Ballast = entry.Ballast,
+                        Restrictor = entry.Restrictor,
+                        LegalTyres = entry.LegalTyres,
+                        DefaultSkin = entry.Skin
+                    };
+                }
+            }
+
+            var firstEntry = _configuration.EntryList.Cars[0];
+            DynamicCarSelection = new DynamicCarSelectionState
+            {
+                AllowedModels = modelConfigs.Keys.ToList(),
+                ModelConfigurations = modelConfigs,
+                DefaultModel = firstEntry.Model,
+                DefaultSkin = firstEntry.Skin ?? ""
+            };
+
+            Log.Information("Dynamic car selection enabled with {Count} allowed models: {Models}",
+                DynamicCarSelection.AllowedModels.Count,
+                string.Join(", ", DynamicCarSelection.AllowedModels));
+        }
+
         for (int i = 0; i < EntryCars.Length; i++)
         {
             var entry = _configuration.EntryList.Cars[i];
@@ -262,5 +376,18 @@ public class EntryCarManager
 
             EntryCars[i] = car;
         }
+    }
+
+    /// <summary>
+    /// Tries to get the model configuration for dynamic car selection.
+    /// </summary>
+    public bool TryGetModelConfiguration(string model, [MaybeNullWhen(false)] out CarModelConfiguration config)
+    {
+        if (DynamicCarSelection != null)
+        {
+            return DynamicCarSelection.ModelConfigurations.TryGetValue(model, out config);
+        }
+        config = null;
+        return false;
     }
 }

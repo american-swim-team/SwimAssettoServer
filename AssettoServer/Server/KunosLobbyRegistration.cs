@@ -104,7 +104,9 @@ public class KunosLobbyRegistration : BackgroundService
         var builder = new UriBuilder(url);
         var queryParams = HttpUtility.ParseQueryString(builder.Query);
 
-        string cars = string.Join(',', _entryCarManager.EntryCars.Select(c => c.Model).Distinct());
+        string cars = _entryCarManager.DynamicCarSelection != null
+            ? string.Join(',', _entryCarManager.DynamicCarSelection.AllowedModels)
+            : string.Join(',', _entryCarManager.EntryCars.Select(c => c.Model).Distinct());
 
         // Truncate cars list, Lobby will return 404 when the URL is too long
         const int maxLen = 1200;
