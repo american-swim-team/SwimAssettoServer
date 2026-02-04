@@ -431,8 +431,17 @@ public class AiState : IAiState, IDisposable
             if (!junctionFound && point.JunctionStartId >= 0 && distanceTravelled < junctions[point.JunctionStartId].IndicateDistancePre)
             {
                 ref readonly var jct = ref junctions[point.JunctionStartId];
-                
-                var indicator = _junctionEvaluator.WillTakeJunction(point.JunctionStartId) ? jct.IndicateWhenTaken : jct.IndicateWhenNotTaken;
+                bool willTake = _junctionEvaluator.WillTakeJunction(point.JunctionStartId);
+                int junctionEndPoint = willTake ? jct.EndPointId : point.NextId;
+
+                // Check if junction endpoint is safe before committing - prevents teleporting into occupied lanes
+                if (!IsJunctionEndpointClear(junctionEndPoint))
+                {
+                    _junctionUnsafe = true;
+                    continue;
+                }
+
+                var indicator = willTake ? jct.IndicateWhenTaken : jct.IndicateWhenNotTaken;
                 if (indicator != 0 && !_junctionUnsafe && CanUseJunction(indicator))
                 {
                     _indicator = indicator;
@@ -970,6 +979,130 @@ public class AiState : IAiState, IDisposable
             }
         }
 
+        // Additional physical proximity check - catches cars not tracked by SlowestAiStates
+        if (IsAnyAiInTargetLaneCorridor(targetPointId, isOvertake, lookAheadDistance, lookBehindDistance, minSafeDistance, laneChangeSafeDistance))
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Physical proximity check that iterates ALL AI states to find cars that might be in the target lane corridor.
+    /// This is a belt-and-suspenders approach to catch cars that SlowestAiStates misses (faster cars at same spline point).
+    /// </summary>
+    private bool IsAnyAiInTargetLaneCorridor(int targetPointId, bool isOvertake,
+        float lookAheadDistance, float lookBehindDistance, float minSafeDistance, float laneChangeSafeDistance)
+    {
+        var targetPosition = _spline.Points[targetPointId].Position;
+        float relevantRadiusSquared = (lookAheadDistance + lookBehindDistance + 50) * (lookAheadDistance + lookBehindDistance + 50);
+
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (!car.AiControlled) continue;
+
+            var carAi = _trafficAi.GetAiCarBySessionId(car.SessionId);
+            foreach (var aiState in carAi.LastSeenAiState)
+            {
+                // Cast to AiState to check Initialized status
+                if (aiState == null || aiState == this) continue;
+                if (aiState is AiState typedState && !typedState.Initialized) continue;
+
+                // Early distance cull
+                float distanceSquared = Vector3.DistanceSquared(Status.Position, aiState.Status.Position);
+                if (distanceSquared > relevantRadiusSquared) continue;
+
+                // Check if this car is in the target lane (physically close to target corridor)
+                if (!IsCarInTargetLane(aiState, targetPointId)) continue;
+
+                float physicalDistance = MathF.Sqrt(distanceSquared);
+
+                // Too close - reject
+                if (physicalDistance < minSafeDistance) return true;
+
+                // Check lane changing cars (if it's an AiState, check lane change status)
+                if (aiState is AiState otherAiState && otherAiState.IsCurrentlyLaneChanging && physicalDistance < laneChangeSafeDistance * 1.5f)
+                    return true;
+
+                // Check relative speeds (car ahead is slower, or car behind is faster)
+                bool isAhead = IsCarAhead(aiState);
+                float theirSpeed = aiState.Status.Velocity.Length();
+                if (isAhead && theirSpeed < CurrentSpeed - _configuration.LaneChangeSpeedThresholdMs * 0.5f)
+                    return true;
+                if (!isAhead && theirSpeed > CurrentSpeed + _configuration.LaneChangeSpeedThresholdMs)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Check if another car is in the target lane by examining if their position is close to the target lane corridor.
+    /// </summary>
+    private bool IsCarInTargetLane(IAiState other, int targetPointId)
+    {
+        var points = _spline.Points;
+
+        // Check if the car is physically close to the target lane spline points
+        // Walk forward and backward from target point to see if car is near any of them
+        int checkId = targetPointId;
+        for (int i = 0; i < 10 && checkId >= 0; i++) // Check several points ahead
+        {
+            float distToPoint = Vector3.Distance(other.Status.Position, points[checkId].Position);
+            if (distToPoint < _configuration.LaneWidthMeters * 1.5f)
+                return true;
+            checkId = points[checkId].NextId;
+        }
+
+        checkId = targetPointId;
+        for (int i = 0; i < 10 && checkId >= 0; i++) // Check several points behind
+        {
+            float distToPoint = Vector3.Distance(other.Status.Position, points[checkId].Position);
+            if (distToPoint < _configuration.LaneWidthMeters * 1.5f)
+                return true;
+            checkId = points[checkId].PreviousId;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Check if another car is ahead of us based on velocity direction.
+    /// </summary>
+    private bool IsCarAhead(IAiState other)
+    {
+        Vector3 toOther = other.Status.Position - Status.Position;
+        Vector3 ourDirection = Status.Velocity.LengthSquared() > 0.01f
+            ? Vector3.Normalize(Status.Velocity)
+            : Vector3.Normalize(_spline.GetForwardVector(CurrentSplinePointId));
+        return Vector3.Dot(toOther, ourDirection) > 0;
+    }
+
+    /// <summary>
+    /// Check if a junction endpoint is clear of other AI traffic.
+    /// This prevents cars from teleporting into occupied lanes at junction points.
+    /// </summary>
+    private bool IsJunctionEndpointClear(int endPointId)
+    {
+        if (endPointId < 0) return true;
+
+        float safeDistanceSquared = _configuration.LaneChangeMinDistanceMeters * _configuration.LaneChangeMinDistanceMeters;
+        var endPosition = _spline.Points[endPointId].Position;
+
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (!car.AiControlled) continue;
+
+            var carAi = _trafficAi.GetAiCarBySessionId(car.SessionId);
+            foreach (var aiState in carAi.LastSeenAiState)
+            {
+                // Cast to AiState to check Initialized status
+                if (aiState == null || aiState == this) continue;
+                if (aiState is AiState typedState && !typedState.Initialized) continue;
+
+                if (Vector3.DistanceSquared(aiState.Status.Position, endPosition) < safeDistanceSquared)
+                    return false;
+            }
+        }
         return true;
     }
 
