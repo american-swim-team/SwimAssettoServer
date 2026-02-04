@@ -64,11 +64,17 @@ public class TrafficAi : BackgroundService, ITrafficAi
 
     private void OnFirstUpdateSentHideCars(ACTcpClient sender, EventArgs args)
     {
-        sender.SendPacket(new CSPCarVisibilityUpdate
+        foreach (var entryCar in _entryCarManager.EntryCars)
         {
-            SessionId = sender.SessionId,
-            Visible = sender.EntryCar.AiControlled ? CSPCarVisibility.Invisible : CSPCarVisibility.Visible
-        });
+            if (entryCar.AiControlled)
+            {
+                sender.SendPacket(new CSPCarVisibilityUpdate
+                {
+                    SessionId = entryCar.SessionId,
+                    Visible = CSPCarVisibility.Invisible
+                });
+            }
+        }
     }
 
     private void OnResetCar(ACTcpClient sender)
