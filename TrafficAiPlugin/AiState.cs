@@ -1009,7 +1009,7 @@ public class AiState : IAiState, IDisposable
 
         // Tangents: current direction and target lane direction, scaled by distance
         Vector3 startTangent = Vector3.Normalize(Status.Velocity.Length() > 0.1f ? Status.Velocity : _spline.GetForwardVector(CurrentSplinePointId)) * laneChangeDistance * 0.5f;
-        Vector3 endTangent = _spline.GetForwardVector(endPointId) * laneChangeDistance * 0.5f;
+        Vector3 endTangent = Vector3.Normalize(_spline.GetForwardVector(endPointId)) * laneChangeDistance * 0.5f;
 
         // Get camber values for interpolation
         float startCamber = _spline.Operations.GetCamber(CurrentSplinePointId);
