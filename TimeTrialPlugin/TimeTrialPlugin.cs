@@ -109,10 +109,8 @@ public class TimeTrialPlugin : IHostedService
         client.Collision -= OnCollision;
     }
 
-    private void OnCollision(ACTcpClient? sender, CollisionEventArgs e)
+    private void OnCollision(ACTcpClient sender, CollisionEventArgs e)
     {
-        if (sender == null) return;
-
         if (_instances.TryGetValue(sender.SessionId, out var instance))
         {
             instance.OnCollision();
