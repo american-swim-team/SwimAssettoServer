@@ -52,7 +52,7 @@ end
 
 local function formatDelta(deltaMs)
     if deltaMs == 0 then return "" end
-    local sign = deltaMs > 0 and "+" or ""
+    local sign = deltaMs > 0 and "+" or "-"
     return sign .. formatTime(math.abs(deltaMs))
 end
 
@@ -72,7 +72,7 @@ local lapStartEvent = ac.OnlineEvent({
     State.activeLap = {
         trackId = data.trackId,
         trackName = data.trackName,
-        startTime = ac.getSim().time,
+        startTime = os.clock(),
         totalCheckpoints = data.totalCheckpoints,
         currentCheckpoint = 0,
         pbMs = data.personalBestMs,
@@ -145,9 +145,8 @@ local invalidationEvent = ac.OnlineEvent({
         fadeAlpha = 1.0,
         displayTime = 3.0
     }
-    if State.activeLap and State.activeLap.trackId == data.trackId then
-        State.activeLap.valid = false
-    end
+    -- Clear the active lap on invalidation
+    State.activeLap = nil
     ac.debug("TT_Invalidated", data.reason)
 end)
 
@@ -212,7 +211,6 @@ function script.drawUI()
     if not Settings.hudEnabled then return end
 
     local uiState = ac.getUI()
-    local sim = ac.getSim()
 
     local hasActiveLap = State.activeLap ~= nil
     local hasResult = State.lastLapResult ~= nil
@@ -223,17 +221,16 @@ function script.drawUI()
         return
     end
 
-    -- Calculate window size
-    local dynamicHeight = 100
+    -- Calculate window size based on content
+    local dynamicHeight = 80
     if hasActiveLap then
-        dynamicHeight = 120
-    end
-    if hasResult then
+        dynamicHeight = 130
+    elseif hasResult then
         dynamicHeight = 140
     end
 
     -- Position (top-right)
-    local screenW, screenH = uiState.windowSize.x, uiState.windowSize.y
+    local screenW = uiState.windowSize.x
     local margin = 32
     local posX = screenW - UI.width - margin
     local posY = margin
@@ -243,7 +240,7 @@ function script.drawUI()
         drawPanel(0, 0, UI.width, dynamicHeight, UI.cornerRadius, Theme.glass)
 
         local cx = UI.padding
-        local cy = 10
+        local cy = 12
 
         -- Active lap display
         if hasActiveLap then
@@ -254,18 +251,18 @@ function script.drawUI()
             ui.pushFont(ui.Font.Small)
             ui.setCursor(vec2(cx, cy))
             ui.textColored(lap.trackName or "Unknown Track", Theme.textMuted)
-            cy = cy + 18
             ui.popFont()
+            cy = cy + 20
 
-            -- Calculate current elapsed time
-            local elapsed = (sim.time - lap.startTime) * 1000
+            -- Calculate current elapsed time using os.clock()
+            local elapsedMs = (os.clock() - lap.startTime) * 1000
 
             -- Main timer
             ui.pushFont(ui.Font.Huge)
             ui.setCursor(vec2(cx, cy))
-            ui.textColored(formatTime(math.floor(elapsed)), validColor)
+            ui.textColored(formatTime(elapsedMs), validColor)
             ui.popFont()
-            cy = cy + 44
+            cy = cy + 54
 
             -- Sector progress
             ui.pushFont(ui.Font.Small)
@@ -293,7 +290,7 @@ function script.drawUI()
             ui.setCursor(vec2(cx, cy))
             ui.textColored(formatTime(result.totalTimeMs), rgbm(Theme.textHero.r, Theme.textHero.g, Theme.textHero.b, alpha))
             ui.popFont()
-            cy = cy + 46
+            cy = cy + 54
 
             -- Delta
             if result.deltaToPbMs ~= 0 then
