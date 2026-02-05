@@ -11,7 +11,7 @@ public class TimeTrialModule : AssettoServerModule<TimeTrialConfiguration>
 {
     protected override void Load(ContainerBuilder builder)
     {
-        builder.RegisterType<TimeTrialPlugin>().AsSelf().As<IHostedService>().SingleInstance();
+        builder.RegisterType<TimeTrialPlugin>().AsSelf().AutoActivate().SingleInstance();
         builder.RegisterType<EntryCarTimeTrial>().AsSelf();
         builder.RegisterType<CheckpointDetector>().AsSelf().SingleInstance();
         builder.RegisterType<LeaderboardManager>().AsSelf().SingleInstance();

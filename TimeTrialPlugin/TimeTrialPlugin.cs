@@ -11,7 +11,7 @@ using TimeTrialPlugin.Timing;
 
 namespace TimeTrialPlugin;
 
-public class TimeTrialPlugin : IHostedService
+public class TimeTrialPlugin : BackgroundService
 {
     private readonly TimeTrialConfiguration _configuration;
     private readonly EntryCarManager _entryCarManager;
@@ -46,22 +46,22 @@ public class TimeTrialPlugin : IHostedService
         using var streamReader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("TimeTrialPlugin.lua.timetrial.lua")!);
         scriptProvider.AddScript(streamReader.ReadToEnd(), "timetrial.lua");
 
-        _entryCarManager.ClientConnected += OnClientConnected;
-        _entryCarManager.ClientDisconnected += OnClientDisconnected;
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        // Create per-car instances
+        // Create per-car instances immediately
         foreach (var entryCar in _entryCarManager.EntryCars)
         {
             _instances[entryCar.SessionId] = _entryCarTimeTrialFactory(entryCar);
         }
 
+        _entryCarManager.ClientConnected += OnClientConnected;
+        _entryCarManager.ClientDisconnected += OnClientDisconnected;
+    }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
         return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public override Task StopAsync(CancellationToken cancellationToken)
     {
         foreach (var instance in _instances.Values)
         {
@@ -69,12 +69,12 @@ public class TimeTrialPlugin : IHostedService
         }
         _instances.Clear();
 
-        return Task.CompletedTask;
+        return base.StopAsync(cancellationToken);
     }
 
     private void OnClientConnected(ACTcpClient client, EventArgs e)
     {
-        Log.Debug("TimeTrialPlugin: Client {Name} connected, subscribing to Collision event", client.Name);
+        Log.Debug("TimeTrialPlugin: Client {Name} connected", client.Name);
 
         if (_instances.TryGetValue(client.SessionId, out var instance))
         {
@@ -83,7 +83,6 @@ public class TimeTrialPlugin : IHostedService
 
         // Register collision handler
         client.Collision += OnCollision;
-        Log.Debug("TimeTrialPlugin: Collision handler subscribed for {Name}", client.Name);
 
         // Wait for Lua to be ready before sending packets
         client.LuaReady += OnLuaReady;
@@ -110,11 +109,8 @@ public class TimeTrialPlugin : IHostedService
         client.Collision -= OnCollision;
     }
 
-    private void OnCollision(ACTcpClient? sender, CollisionEventArgs e)
+    private void OnCollision(ACTcpClient sender, CollisionEventArgs e)
     {
-        Log.Debug("TimeTrialPlugin: OnCollision fired, sender={Sender}", sender?.Name ?? "null");
-        if (sender == null) return;
-
         if (_instances.TryGetValue(sender.SessionId, out var instance))
         {
             instance.OnCollision();
