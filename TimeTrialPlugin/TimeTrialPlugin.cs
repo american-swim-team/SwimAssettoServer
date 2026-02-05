@@ -84,6 +84,19 @@ public class TimeTrialPlugin : IHostedService
         // Register collision handler
         client.Collision += OnCollision;
 
+        // Wait for Lua to be ready before sending packets
+        client.LuaReady += OnLuaReady;
+    }
+
+    private void OnLuaReady(ACTcpClient client, EventArgs e)
+    {
+        client.LuaReady -= OnLuaReady;
+
+        if (_instances.TryGetValue(client.SessionId, out var instance))
+        {
+            instance.SendTrackInfo();
+        }
+
         // Send leaderboards for all tracks
         foreach (var track in _configuration.Tracks)
         {

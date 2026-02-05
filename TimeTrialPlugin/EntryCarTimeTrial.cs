@@ -59,7 +59,6 @@ public class EntryCarTimeTrial
     {
         _hasLastPosition = false;
         _currentTrack = null;
-        SendTrackInfo();
     }
 
     public void OnCollision()
@@ -322,7 +321,7 @@ public class EntryCarTimeTrial
         return _leaderboardManager.GetPersonalBest(trackId, client.Guid);
     }
 
-    private void SendTrackInfo()
+    public void SendTrackInfo()
     {
         var client = _entryCar.Client;
         if (client == null) return;
