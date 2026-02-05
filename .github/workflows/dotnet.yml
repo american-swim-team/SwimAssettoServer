@@ -35,10 +35,18 @@ jobs:
       run: cd out-linux-arm64 && tar -czf assetto-server-linux-arm64.tar.gz * && cd ..
     - name: Package (Windows x64)
       run: cd out-win-x64 && zip -r assetto-server-win-x64.zip * && cd ..
+    - name: Determine if prerelease
+      id: prerelease
+      run: |
+        if [[ "${{ github.ref_name }}" =~ -alpha|-beta|-rc ]]; then
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+        fi
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
-        prerelease: true
+        prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
         files: |
           out-linux-x64/assetto-server-linux-x64.tar.gz
           out-linux-arm64/assetto-server-linux-arm64.tar.gz

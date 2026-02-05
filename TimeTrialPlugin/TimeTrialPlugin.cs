@@ -74,7 +74,7 @@ public class TimeTrialPlugin : IHostedService
 
     private void OnClientConnected(ACTcpClient client, EventArgs e)
     {
-        Log.Debug("TimeTrialPlugin: Client {Name} connected", client.Name);
+        Log.Debug("TimeTrialPlugin: Client {Name} connected, subscribing to Collision event", client.Name);
 
         if (_instances.TryGetValue(client.SessionId, out var instance))
         {
@@ -83,6 +83,7 @@ public class TimeTrialPlugin : IHostedService
 
         // Register collision handler
         client.Collision += OnCollision;
+        Log.Debug("TimeTrialPlugin: Collision handler subscribed for {Name}", client.Name);
 
         // Wait for Lua to be ready before sending packets
         client.LuaReady += OnLuaReady;
@@ -109,8 +110,11 @@ public class TimeTrialPlugin : IHostedService
         client.Collision -= OnCollision;
     }
 
-    private void OnCollision(ACTcpClient sender, CollisionEventArgs e)
+    private void OnCollision(ACTcpClient? sender, CollisionEventArgs e)
     {
+        Log.Debug("TimeTrialPlugin: OnCollision fired, sender={Sender}", sender?.Name ?? "null");
+        if (sender == null) return;
+
         if (_instances.TryGetValue(sender.SessionId, out var instance))
         {
             instance.OnCollision();
