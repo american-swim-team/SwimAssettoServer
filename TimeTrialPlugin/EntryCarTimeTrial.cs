@@ -312,6 +312,10 @@ public class EntryCarTimeTrial
 
         Log.Debug("Player {Name} lap invalidated on {Track}: {Reason}",
             _entryCar.Client?.Name, _currentTrack.Name, reason);
+
+        // Reset state so player can start a new lap
+        _currentTrack = null;
+        _nextCheckpointIndex = 0;
     }
 
     private LapTime? GetPersonalBest(string trackId)
