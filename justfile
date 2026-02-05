@@ -21,10 +21,14 @@ copy-plugins:
     set -euo pipefail
     plugins_dir="AssettoServer/bin/Release/net9.0/plugins"
     mkdir -p "$plugins_dir"
-    for plugin in SwimCrashPlugin RandomWeatherPlugin ReportPlugin DiscordAuditPlugin SwimCutupPlugin ReverseProxyPlugin TrafficAiPlugin; do
+    for plugin in SwimCrashPlugin RandomWeatherPlugin ReportPlugin DiscordAuditPlugin SwimCutupPlugin ReverseProxyPlugin TrafficAiPlugin TimeTrialPlugin; do
         mkdir -p "$plugins_dir/$plugin"
         /usr/bin/dotnet build "$plugin/$plugin.csproj" -c Release
         cp "$plugin/bin/Release/net9.0/"*.dll "$plugins_dir/$plugin/" 2>/dev/null || true
+        # Copy lua folders if they exist
+        if [ -d "$plugin/bin/Release/net9.0/lua" ]; then
+            cp -r "$plugin/bin/Release/net9.0/lua" "$plugins_dir/$plugin/"
+        fi
     done
     # TrafficAiPlugin.Shared is a dependency, copy it too
     mkdir -p "$plugins_dir/TrafficAiPlugin.Shared"
