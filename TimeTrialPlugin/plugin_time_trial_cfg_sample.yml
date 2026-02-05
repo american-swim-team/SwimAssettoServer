@@ -1,0 +1,63 @@
+# Time Trial Plugin Configuration
+# Copy this file to your server's cfg/ directory as plugin_time_trial_cfg.yml
+
+# Persist best times to a file
+PersistBestTimes: true
+
+# File path for persisted best times (relative to server directory)
+BestTimesFilePath: "timetrial_bests.json"
+
+# Minimum speed in km/h required to start a lap (prevents false starts)
+MinStartSpeedKph: 5.0
+
+# Maximum time in seconds allowed per sector before lap is invalidated
+MaxSectorTimeSeconds: 300.0
+
+# Show leaderboard in the UI
+ShowLeaderboard: true
+
+# Number of entries to show in leaderboard
+LeaderboardSize: 10
+
+# Distance threshold in meters for teleport detection (invalidates lap)
+TeleportThresholdMeters: 50.0
+
+# Enable collision detection for lap invalidation
+InvalidateOnCollision: true
+
+# Enable car reset detection for lap invalidation
+InvalidateOnReset: true
+
+# List of time trial tracks
+Tracks:
+  - Id: "main_loop"
+    Name: "Main Loop"
+    Checkpoints:
+      # Start/Finish line - checkpoint index 0
+      - Index: 0
+        Type: StartFinish
+        Position: [1234.5, 10.0, 5678.9]
+        Radius: 15.0
+      # Sector 1 checkpoint
+      - Index: 1
+        Type: Sector
+        Position: [2000.0, 12.0, 6000.0]
+        Radius: 12.0
+      # Sector 2 checkpoint
+      - Index: 2
+        Type: Sector
+        Position: [2500.0, 8.0, 5500.0]
+        Radius: 12.0
+
+  # Example: Add more tracks for your map
+  # - Id: "mountain_run"
+  #   Name: "Mountain Run"
+  #   Checkpoints:
+  #     - Index: 0
+  #       Type: StartFinish
+  #       Position: [100.0, 50.0, 200.0]
+  #       Radius: 20.0
+  #     - Index: 1
+  #       Type: Sector
+  #       Position: [500.0, 75.0, 400.0]
+  #       Radius: 15.0
