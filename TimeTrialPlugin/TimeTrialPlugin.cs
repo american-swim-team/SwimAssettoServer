@@ -46,12 +46,6 @@ public class TimeTrialPlugin : BackgroundService
         using var streamReader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("TimeTrialPlugin.lua.timetrial.lua")!);
         scriptProvider.AddScript(streamReader.ReadToEnd(), "timetrial.lua");
 
-        // Create per-car instances immediately
-        foreach (var entryCar in _entryCarManager.EntryCars)
-        {
-            _instances[entryCar.SessionId] = _entryCarTimeTrialFactory(entryCar);
-        }
-
         _entryCarManager.ClientConnected += OnClientConnected;
         _entryCarManager.ClientDisconnected += OnClientDisconnected;
     }
@@ -76,10 +70,14 @@ public class TimeTrialPlugin : BackgroundService
     {
         Log.Debug("TimeTrialPlugin: Client {Name} connected", client.Name);
 
-        if (_instances.TryGetValue(client.SessionId, out var instance))
+        // Create instance on-demand if not exists
+        if (!_instances.TryGetValue(client.SessionId, out var instance))
         {
-            instance.OnClientConnected();
+            instance = _entryCarTimeTrialFactory(client.EntryCar);
+            _instances[client.SessionId] = instance;
         }
+
+        instance.OnClientConnected();
 
         // Register collision handler
         client.Collision += OnCollision;
