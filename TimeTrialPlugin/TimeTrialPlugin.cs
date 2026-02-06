@@ -79,8 +79,15 @@ public class TimeTrialPlugin : BackgroundService
 
         instance.OnClientConnected();
 
-        // Register collision handler
-        client.Collision += OnCollision;
+        // Register collision handler using lambda to ensure proper binding
+        client.Collision += (sender, args) =>
+        {
+            Log.Debug("TimeTrialPlugin: Collision lambda fired for {Name}", sender.Name);
+            if (_instances.TryGetValue(sender.SessionId, out var inst))
+            {
+                inst.OnCollision();
+            }
+        };
 
         // Wait for Lua to be ready before sending packets
         client.LuaReady += OnLuaReady;
@@ -104,15 +111,7 @@ public class TimeTrialPlugin : BackgroundService
 
     private void OnClientDisconnected(ACTcpClient client, EventArgs e)
     {
-        client.Collision -= OnCollision;
-    }
-
-    private void OnCollision(ACTcpClient sender, CollisionEventArgs e)
-    {
-        if (_instances.TryGetValue(sender.SessionId, out var instance))
-        {
-            instance.OnCollision();
-        }
+        // Note: Can't easily unsubscribe lambda, but client is disconnecting anyway
     }
 
     public void BroadcastLeaderboard(string trackId)
