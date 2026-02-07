@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using AssettoServer.Network.Tcp;
 using AssettoServer.Server;
 using AssettoServer.Server.Configuration;
@@ -7,7 +6,6 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using TimeTrialPlugin.Configuration;
 using TimeTrialPlugin.Packets;
-using TimeTrialPlugin.Timing;
 
 namespace TimeTrialPlugin;
 
@@ -15,7 +13,6 @@ public class TimeTrialPlugin : BackgroundService
 {
     private readonly TimeTrialConfiguration _configuration;
     private readonly EntryCarManager _entryCarManager;
-    private readonly LeaderboardManager _leaderboardManager;
     private readonly Func<EntryCar, EntryCarTimeTrial> _entryCarTimeTrialFactory;
     private readonly Dictionary<int, EntryCarTimeTrial> _instances = new();
 
@@ -24,12 +21,10 @@ public class TimeTrialPlugin : BackgroundService
         ACServerConfiguration serverConfiguration,
         EntryCarManager entryCarManager,
         CSPServerScriptProvider scriptProvider,
-        LeaderboardManager leaderboardManager,
         Func<EntryCar, EntryCarTimeTrial> entryCarTimeTrialFactory)
     {
         _configuration = configuration;
         _entryCarManager = entryCarManager;
-        _leaderboardManager = leaderboardManager;
         _entryCarTimeTrialFactory = entryCarTimeTrialFactory;
 
         Log.Information("------------------------------------");
@@ -59,6 +54,7 @@ public class TimeTrialPlugin : BackgroundService
     {
         foreach (var instance in _instances.Values)
         {
+            instance.LapCompleted -= OnLapCompleted;
             instance.Dispose();
         }
         _instances.Clear();
@@ -74,6 +70,7 @@ public class TimeTrialPlugin : BackgroundService
         if (!_instances.TryGetValue(client.SessionId, out var instance))
         {
             instance = _entryCarTimeTrialFactory(client.EntryCar);
+            instance.LapCompleted += OnLapCompleted;
             _instances[client.SessionId] = instance;
         }
 
@@ -93,6 +90,16 @@ public class TimeTrialPlugin : BackgroundService
         client.LuaReady += OnLuaReady;
     }
 
+    private void OnLapCompleted(object? sender, LapCompletedEventArgs e)
+    {
+        var message = $"{e.PlayerName} completed {e.TrackName} in {e.FormattedTime}";
+        if (e.IsPersonalBest)
+        {
+            message += " (New PB!)";
+        }
+        _entryCarManager.BroadcastChat(message);
+    }
+
     private void OnLuaReady(ACTcpClient client, EventArgs e)
     {
         client.LuaReady -= OnLuaReady;
@@ -101,58 +108,11 @@ public class TimeTrialPlugin : BackgroundService
         {
             instance.SendTrackInfo();
         }
-
-        // Send leaderboards for all tracks
-        foreach (var track in _configuration.Tracks)
-        {
-            SendLeaderboardToClient(client, track.Id);
-        }
     }
 
     private void OnClientDisconnected(ACTcpClient client, EventArgs e)
     {
         // Note: Can't easily unsubscribe lambda, but client is disconnecting anyway
-    }
-
-    public void BroadcastLeaderboard(string trackId)
-    {
-        var leaderboard = _leaderboardManager.GetLeaderboard(trackId);
-        var entriesJson = JsonSerializer.Serialize(leaderboard.Select(lt => new
-        {
-            lt.PlayerName,
-            lt.CarModel,
-            lt.TotalTimeMs,
-            FormattedTime = lt.FormattedTotalTime
-        }));
-
-        var packet = new LeaderboardUpdatePacket
-        {
-            TrackId = trackId,
-            EntriesJson = entriesJson
-        };
-
-        foreach (var entryCar in _entryCarManager.EntryCars)
-        {
-            entryCar.Client?.SendPacket(packet);
-        }
-    }
-
-    private void SendLeaderboardToClient(ACTcpClient client, string trackId)
-    {
-        var leaderboard = _leaderboardManager.GetLeaderboard(trackId);
-        var entriesJson = JsonSerializer.Serialize(leaderboard.Select(lt => new
-        {
-            lt.PlayerName,
-            lt.CarModel,
-            lt.TotalTimeMs,
-            FormattedTime = lt.FormattedTotalTime
-        }));
-
-        client.SendPacket(new LeaderboardUpdatePacket
-        {
-            TrackId = trackId,
-            EntriesJson = entriesJson
-        });
     }
 
     internal EntryCarTimeTrial? GetTimeTrial(EntryCar entryCar)

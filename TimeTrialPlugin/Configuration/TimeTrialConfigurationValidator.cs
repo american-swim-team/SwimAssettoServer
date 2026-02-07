@@ -10,7 +10,6 @@ public class TimeTrialConfigurationValidator : AbstractValidator<TimeTrialConfig
     {
         RuleFor(c => c.MinStartSpeedKph).GreaterThanOrEqualTo(0);
         RuleFor(c => c.MaxSectorTimeSeconds).GreaterThan(0);
-        RuleFor(c => c.LeaderboardSize).GreaterThan(0).LessThanOrEqualTo(100);
         RuleFor(c => c.TeleportThresholdMeters).GreaterThan(0);
         RuleFor(c => c.BestTimesFilePath).NotEmpty();
 

@@ -1,6 +1,7 @@
 using AssettoServer.Server.Plugin;
 using Autofac;
 using Microsoft.Extensions.Hosting;
+using TimeTrialPlugin.Api;
 using TimeTrialPlugin.Configuration;
 using TimeTrialPlugin.Detection;
 using TimeTrialPlugin.Timing;
@@ -14,6 +15,15 @@ public class TimeTrialModule : AssettoServerModule<TimeTrialConfiguration>
         builder.RegisterType<TimeTrialPlugin>().AsSelf().AutoActivate().SingleInstance();
         builder.RegisterType<EntryCarTimeTrial>().AsSelf();
         builder.RegisterType<CheckpointDetector>().AsSelf().SingleInstance();
+
+        // Register HTTP client and API client
+        builder.Register(ctx =>
+        {
+            var config = ctx.Resolve<TimeTrialConfiguration>();
+            var httpClient = new HttpClient();
+            return new TimeTrialApiClient(httpClient, config);
+        }).AsSelf().SingleInstance();
+
         builder.RegisterType<LeaderboardManager>().AsSelf().SingleInstance();
     }
 
@@ -23,11 +33,12 @@ public class TimeTrialModule : AssettoServerModule<TimeTrialConfiguration>
         BestTimesFilePath = "timetrial_bests.json",
         MinStartSpeedKph = 5.0f,
         MaxSectorTimeSeconds = 300.0f,
-        ShowLeaderboard = true,
-        LeaderboardSize = 10,
         TeleportThresholdMeters = 50.0f,
         InvalidateOnCollision = true,
         InvalidateOnReset = true,
+        ApiUrl = null,
+        ApiKey = null,
+        SubmitToApi = false,
         Tracks =
         [
             new TrackDefinition

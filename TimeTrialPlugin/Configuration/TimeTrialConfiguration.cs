@@ -19,12 +19,6 @@ public class TimeTrialConfiguration : IValidateConfiguration<TimeTrialConfigurat
     [YamlMember(Description = "Maximum time in seconds allowed per sector before lap is invalidated")]
     public float MaxSectorTimeSeconds { get; set; } = 300.0f;
 
-    [YamlMember(Description = "Show leaderboard in the UI")]
-    public bool ShowLeaderboard { get; set; } = true;
-
-    [YamlMember(Description = "Number of entries to show in leaderboard")]
-    public int LeaderboardSize { get; set; } = 10;
-
     [YamlMember(Description = "Distance threshold in meters for teleport detection (invalidates lap)")]
     public float TeleportThresholdMeters { get; set; } = 50.0f;
 
@@ -37,6 +31,15 @@ public class TimeTrialConfiguration : IValidateConfiguration<TimeTrialConfigurat
     [YamlMember(Description = "List of time trial tracks")]
     public List<TrackDefinition> Tracks { get; set; } = [];
 
+    [YamlMember(Description = "API URL for remote leaderboard persistence (e.g., https://api.swim.gg/assetto)")]
+    public string? ApiUrl { get; init; }
+
+    [YamlMember(Description = "API key for authenticating with the remote API")]
+    public string? ApiKey { get; init; }
+
+    [YamlMember(Description = "Submit lap times to the remote API")]
+    public bool SubmitToApi { get; init; } = false;
+
     [YamlIgnore]
     public float MinStartSpeedMs => MinStartSpeedKph / 3.6f;
 
@@ -45,4 +48,7 @@ public class TimeTrialConfiguration : IValidateConfiguration<TimeTrialConfigurat
 
     [YamlIgnore]
     public float TeleportThresholdSquared => TeleportThresholdMeters * TeleportThresholdMeters;
+
+    [YamlIgnore]
+    public bool IsApiConfigured => SubmitToApi && !string.IsNullOrEmpty(ApiUrl) && !string.IsNullOrEmpty(ApiKey);
 }

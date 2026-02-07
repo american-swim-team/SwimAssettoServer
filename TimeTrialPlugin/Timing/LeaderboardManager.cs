@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Serilog;
+using TimeTrialPlugin.Api;
 using TimeTrialPlugin.Configuration;
 
 namespace TimeTrialPlugin.Timing;
@@ -7,22 +8,56 @@ namespace TimeTrialPlugin.Timing;
 public class LeaderboardManager
 {
     private readonly TimeTrialConfiguration _configuration;
-    private readonly Dictionary<string, List<LapTime>> _leaderboards = new();
+    private readonly TimeTrialApiClient _apiClient;
     private readonly Dictionary<string, Dictionary<ulong, LapTime>> _personalBests = new();
     private readonly object _lock = new();
 
-    public LeaderboardManager(TimeTrialConfiguration configuration)
+    public LeaderboardManager(TimeTrialConfiguration configuration, TimeTrialApiClient apiClient)
     {
         _configuration = configuration;
+        _apiClient = apiClient;
+
         foreach (var track in configuration.Tracks)
         {
-            _leaderboards[track.Id] = [];
             _personalBests[track.Id] = new Dictionary<ulong, LapTime>();
         }
 
         if (configuration.PersistBestTimes)
         {
             LoadFromFile();
+        }
+
+        // Load personal bests from API asynchronously if configured
+        if (configuration.IsApiConfigured)
+        {
+            _ = LoadFromApiAsync();
+        }
+    }
+
+    private async Task LoadFromApiAsync()
+    {
+        try
+        {
+            foreach (var track in _configuration.Tracks)
+            {
+                var times = await _apiClient.GetLeaderboardAsync(track.Id, 100);
+                if (times.Count > 0)
+                {
+                    lock (_lock)
+                    {
+                        foreach (var lapTime in times)
+                        {
+                            _personalBests[track.Id][lapTime.PlayerGuid] = lapTime;
+                        }
+                    }
+                    Log.Information("Loaded {Count} personal bests from API for track {TrackId}",
+                        times.Count, track.Id);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load personal bests from API");
         }
     }
 
@@ -39,27 +74,13 @@ public class LeaderboardManager
         }
     }
 
-    public IReadOnlyList<LapTime> GetLeaderboard(string trackId, int? limit = null)
+    public bool RecordLapTime(LapTime lapTime)
     {
         lock (_lock)
         {
-            if (!_leaderboards.TryGetValue(trackId, out var leaderboard))
+            if (!_personalBests.TryGetValue(lapTime.TrackId, out var personalBests))
             {
-                return [];
-            }
-            var count = limit ?? _configuration.LeaderboardSize;
-            return leaderboard.Take(count).ToList();
-        }
-    }
-
-    public (bool IsPersonalBest, int? LeaderboardPosition) RecordLapTime(LapTime lapTime)
-    {
-        lock (_lock)
-        {
-            if (!_leaderboards.TryGetValue(lapTime.TrackId, out var leaderboard) ||
-                !_personalBests.TryGetValue(lapTime.TrackId, out var personalBests))
-            {
-                return (false, null);
+                return false;
             }
 
             // Check if personal best
@@ -71,47 +92,33 @@ public class LeaderboardManager
                 isPersonalBest = true;
             }
 
-            // Update leaderboard (one entry per player, best time only)
-            var existingEntry = leaderboard.FindIndex(lt => lt.PlayerGuid == lapTime.PlayerGuid);
-            if (existingEntry >= 0)
+            if (isPersonalBest)
             {
-                if (lapTime.TotalTimeMs < leaderboard[existingEntry].TotalTimeMs)
+                if (_configuration.PersistBestTimes)
                 {
-                    leaderboard.RemoveAt(existingEntry);
+                    SaveToFile();
                 }
-                else
+
+                // Submit to API asynchronously if configured
+                if (_configuration.IsApiConfigured)
                 {
-                    // Not better than existing leaderboard entry
-                    return (isPersonalBest, null);
+                    _ = SubmitToApiAsync(lapTime);
                 }
             }
 
-            // Insert in sorted position
-            var insertPosition = leaderboard.FindIndex(lt => lapTime.TotalTimeMs < lt.TotalTimeMs);
-            if (insertPosition < 0)
-            {
-                leaderboard.Add(lapTime);
-                insertPosition = leaderboard.Count - 1;
-            }
-            else
-            {
-                leaderboard.Insert(insertPosition, lapTime);
-            }
+            return isPersonalBest;
+        }
+    }
 
-            // Trim leaderboard to configured size
-            while (leaderboard.Count > _configuration.LeaderboardSize)
-            {
-                leaderboard.RemoveAt(leaderboard.Count - 1);
-            }
-
-            var position = insertPosition < _configuration.LeaderboardSize ? insertPosition + 1 : (int?)null;
-
-            if (_configuration.PersistBestTimes)
-            {
-                SaveToFile();
-            }
-
-            return (isPersonalBest, position);
+    private async Task SubmitToApiAsync(LapTime lapTime)
+    {
+        try
+        {
+            await _apiClient.SubmitLapTimeAsync(lapTime);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to submit lap time to API for player {PlayerName}", lapTime.PlayerName);
         }
     }
 
@@ -133,12 +140,9 @@ public class LeaderboardManager
             {
                 foreach (var (trackId, times) in data)
                 {
-                    if (!_leaderboards.ContainsKey(trackId)) continue;
+                    if (!_personalBests.ContainsKey(trackId)) continue;
 
-                    var sortedTimes = times.OrderBy(t => t.TotalTimeMs).ToList();
-                    _leaderboards[trackId] = sortedTimes.Take(_configuration.LeaderboardSize).ToList();
-
-                    foreach (var time in sortedTimes)
+                    foreach (var time in times)
                     {
                         if (!_personalBests[trackId].ContainsKey(time.PlayerGuid) ||
                             time.TotalTimeMs < _personalBests[trackId][time.PlayerGuid].TotalTimeMs)
@@ -161,7 +165,12 @@ public class LeaderboardManager
     {
         try
         {
-            var json = JsonSerializer.Serialize(_leaderboards, new JsonSerializerOptions
+            // Convert personal bests to lists for serialization
+            var data = _personalBests.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Values.ToList()
+            );
+            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions
             {
                 WriteIndented = true
             });

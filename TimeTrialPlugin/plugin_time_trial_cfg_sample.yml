@@ -1,6 +1,15 @@
 # Time Trial Plugin Configuration
 # Copy this file to your server's cfg/ directory as plugin_time_trial_cfg.yml
 
+# API URL for remote leaderboard persistence (e.g., https://api.swim.gg/assetto)
+ApiUrl: ""
+
+# API key for authenticating with the remote API
+ApiKey: ""
+
+# Submit lap times to the remote API
+SubmitToApi: false
+
 # Persist best times to a file
 PersistBestTimes: true
 
@@ -12,12 +21,6 @@ MinStartSpeedKph: 5.0
 
 # Maximum time in seconds allowed per sector before lap is invalidated
 MaxSectorTimeSeconds: 300.0
-
-# Show leaderboard in the UI
-ShowLeaderboard: true
-
-# Number of entries to show in leaderboard
-LeaderboardSize: 10
 
 # Distance threshold in meters for teleport detection (invalidates lap)
 TeleportThresholdMeters: 50.0

@@ -11,8 +11,18 @@ using TimeTrialPlugin.Timing;
 
 namespace TimeTrialPlugin;
 
+public class LapCompletedEventArgs : EventArgs
+{
+    public required string PlayerName { get; init; }
+    public required string TrackName { get; init; }
+    public required string FormattedTime { get; init; }
+    public required bool IsPersonalBest { get; init; }
+}
+
 public class EntryCarTimeTrial
 {
+    public event EventHandler<LapCompletedEventArgs>? LapCompleted;
+
     private readonly EntryCar _entryCar;
     private readonly TimeTrialConfiguration _configuration;
     private readonly CheckpointDetector _checkpointDetector;
@@ -278,23 +288,28 @@ public class EntryCarTimeTrial
             RecordedAt = DateTime.UtcNow
         };
 
-        var (isPersonalBest, leaderboardPosition) = _leaderboardManager.RecordLapTime(lapTime);
+        var isPersonalBest = _leaderboardManager.RecordLapTime(lapTime);
 
         _entryCar.Client?.SendPacket(new LapCompletedPacket
         {
             TrackId = _currentTrack.Id,
             TotalTimeMs = (int)totalTime,
             IsPersonalBest = isPersonalBest,
-            LeaderboardPosition = leaderboardPosition ?? 0,
             DeltaToPbMs = deltaToPb,
             SectorTimesJson = JsonSerializer.Serialize(_sectorTimes)
         });
 
-        Log.Information("Player {Name} completed lap on {Track}: {Time}ms (PB: {IsPb}, Position: {Pos})",
-            client.Name, _currentTrack.Name, totalTime, isPersonalBest, leaderboardPosition);
+        Log.Information("Player {Name} completed lap on {Track}: {Time}ms (PB: {IsPb})",
+            client.Name, _currentTrack.Name, totalTime, isPersonalBest);
 
-        // Broadcast updated leaderboard
-        BroadcastLeaderboard(_currentTrack.Id);
+        // Raise event for chat broadcast
+        LapCompleted?.Invoke(this, new LapCompletedEventArgs
+        {
+            PlayerName = client.Name ?? "Unknown",
+            TrackName = _currentTrack.Name,
+            FormattedTime = lapTime.FormattedTotalTime,
+            IsPersonalBest = isPersonalBest
+        });
 
         // Reset for next lap
         _currentTrack = null;
@@ -357,8 +372,4 @@ public class EntryCarTimeTrial
         });
     }
 
-    private void BroadcastLeaderboard(string trackId)
-    {
-        // This would broadcast to all clients - implementation in main plugin
-    }
 }
