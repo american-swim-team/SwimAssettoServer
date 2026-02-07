@@ -148,16 +148,24 @@ public class EntryCarTimeTrial
 
         if (crossedCheckpoint.Type == CheckpointType.StartFinish || crossedCheckpoint.Type == CheckpointType.Finish)
         {
-            // Completed lap or starting new lap (for circular tracks)
-            if (crossedCheckpoint.Type == CheckpointType.StartFinish && _nextCheckpointIndex == 0)
+            // Only complete if all sectors were crossed (_nextCheckpointIndex wrapped to 0)
+            if (_nextCheckpointIndex != 0)
             {
-                // Starting a new lap (shouldn't happen here, but handle it)
-                StartLap(_currentTrack, currentTime);
+                Log.Debug("Crossed finish but missed sectors, expected checkpoint {Expected}", _nextCheckpointIndex);
+                InvalidateLap("Missed sector checkpoint");
+                return;
             }
-            else
+
+            // Save track reference before CompleteLap clears it
+            var track = _currentTrack!;
+
+            // Complete the lap
+            CompleteLap(currentTime);
+
+            // If StartFinish, immediately start a new lap
+            if (crossedCheckpoint.Type == CheckpointType.StartFinish)
             {
-                // Completed a lap
-                CompleteLap(currentTime);
+                StartLap(track, currentTime);
             }
         }
         else
