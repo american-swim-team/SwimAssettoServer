@@ -100,8 +100,12 @@ public class LeaderboardManager
                 }
 
                 // Submit to API asynchronously if configured
+                Log.Debug("API configured check: SubmitToApi={SubmitToApi}, ApiUrl={ApiUrl}, ApiKey={HasKey}, IsApiConfigured={IsConfigured}",
+                    _configuration.SubmitToApi, _configuration.ApiUrl, !string.IsNullOrEmpty(_configuration.ApiKey), _configuration.IsApiConfigured);
+
                 if (_configuration.IsApiConfigured)
                 {
+                    Log.Information("Submitting lap time to API for {PlayerName} on {TrackId}", lapTime.PlayerName, lapTime.TrackId);
                     _ = SubmitToApiAsync(lapTime);
                 }
             }

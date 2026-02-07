@@ -7,6 +7,8 @@ namespace TimeTrialPlugin.Configuration;
 public enum CheckpointType
 {
     StartFinish,
+    Start,
+    Finish,
     Sector
 }
 

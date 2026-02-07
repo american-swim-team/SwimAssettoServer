@@ -32,13 +32,13 @@ public class TimeTrialConfiguration : IValidateConfiguration<TimeTrialConfigurat
     public List<TrackDefinition> Tracks { get; set; } = [];
 
     [YamlMember(Description = "API URL for remote leaderboard persistence (e.g., https://api.swim.gg/assetto)")]
-    public string? ApiUrl { get; init; }
+    public string? ApiUrl { get; set; }
 
     [YamlMember(Description = "API key for authenticating with the remote API")]
-    public string? ApiKey { get; init; }
+    public string? ApiKey { get; set; }
 
     [YamlMember(Description = "Submit lap times to the remote API")]
-    public bool SubmitToApi { get; init; } = false;
+    public bool SubmitToApi { get; set; } = false;
 
     [YamlIgnore]
     public float MinStartSpeedMs => MinStartSpeedKph / 3.6f;

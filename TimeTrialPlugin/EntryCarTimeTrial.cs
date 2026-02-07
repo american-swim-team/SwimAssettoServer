@@ -119,10 +119,10 @@ public class EntryCarTimeTrial
 
     private void ProcessPosition(Vector3 previousPosition, Vector3 currentPosition, long currentTime)
     {
-        // If no lap in progress, check for start/finish crossing on any track
+        // If no lap in progress, check for start crossing on any track
         if (_currentTrack == null)
         {
-            var (track, checkpoint) = _checkpointDetector.DetectStartFinishCrossing(previousPosition, currentPosition);
+            var (track, checkpoint) = _checkpointDetector.DetectStartCrossing(previousPosition, currentPosition);
             if (track != null && checkpoint != null)
             {
                 StartLap(track, currentTime);
@@ -146,10 +146,10 @@ public class EntryCarTimeTrial
 
         if (crossedCheckpoint == null) return;
 
-        if (crossedCheckpoint.Type == CheckpointType.StartFinish)
+        if (crossedCheckpoint.Type == CheckpointType.StartFinish || crossedCheckpoint.Type == CheckpointType.Finish)
         {
-            // Completed lap or starting new lap
-            if (_nextCheckpointIndex == 0)
+            // Completed lap or starting new lap (for circular tracks)
+            if (crossedCheckpoint.Type == CheckpointType.StartFinish && _nextCheckpointIndex == 0)
             {
                 // Starting a new lap (shouldn't happen here, but handle it)
                 StartLap(_currentTrack, currentTime);
@@ -173,6 +173,7 @@ public class EntryCarTimeTrial
         var speed = _entryCar.Status.Velocity.Length();
         if (speed < _configuration.MinStartSpeedMs)
         {
+            Log.Debug("StartLap rejected: speed {Speed} < min {MinSpeed}", speed, _configuration.MinStartSpeedMs);
             return;
         }
 
@@ -194,7 +195,8 @@ public class EntryCarTimeTrial
             PersonalBestMs = (int)(pb?.TotalTimeMs ?? 0)
         });
 
-        Log.Debug("Player {Name} started lap on {Track}", _entryCar.Client?.Name, track.Name);
+        Log.Information("Player {Name} started lap on {Track} (checkpoints: {Count})",
+            _entryCar.Client?.Name, track.Name, track.TotalCheckpoints);
     }
 
     private void HandleSectorCheckpoint(CheckpointDefinition checkpoint, long currentTime)
@@ -243,6 +245,9 @@ public class EntryCarTimeTrial
 
     private void CompleteLap(long currentTime)
     {
+        Log.Debug("CompleteLap called: CurrentTrack={Track}, LapValid={Valid}, Client={Client}",
+            _currentTrack?.Name ?? "null", _lapValid, _entryCar.Client?.Name ?? "null");
+
         if (_currentTrack == null) return;
 
         // Record final sector time
@@ -257,7 +262,7 @@ public class EntryCarTimeTrial
 
         if (!_lapValid)
         {
-            Log.Debug("Player {Name} completed invalid lap on {Track}: {Time}ms (reason: {Reason})",
+            Log.Information("Player {Name} completed invalid lap on {Track}: {Time}ms (reason: {Reason})",
                 _entryCar.Client?.Name, _currentTrack.Name, totalTime, _invalidationReason);
 
             // Reset for next lap
@@ -268,6 +273,7 @@ public class EntryCarTimeTrial
         var client = _entryCar.Client;
         if (client == null)
         {
+            Log.Warning("CompleteLap: client is null, cannot record lap");
             _currentTrack = null;
             return;
         }

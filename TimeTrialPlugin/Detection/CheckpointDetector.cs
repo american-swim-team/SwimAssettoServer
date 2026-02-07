@@ -64,24 +64,24 @@ public class CheckpointDetector
     }
 
     /// <summary>
-    /// Find the start/finish checkpoint for any track at the given position.
+    /// Find the start/finish or start checkpoint for any track at the given position.
     /// Used to automatically select which track the player is starting on.
     /// </summary>
-    public (TrackDefinition? Track, CheckpointDefinition? Checkpoint) DetectStartFinishCrossing(
+    public (TrackDefinition? Track, CheckpointDefinition? Checkpoint) DetectStartCrossing(
         Vector3 previousPosition,
         Vector3 currentPosition)
     {
         foreach (var track in _configuration.Tracks)
         {
-            var startFinish = track.StartFinish;
-            if (startFinish == null) continue;
+            var startCheckpoint = track.StartCheckpoint;
+            if (startCheckpoint == null) continue;
 
-            var wasInside = IsInCheckpoint(previousPosition, startFinish);
-            var isInside = IsInCheckpoint(currentPosition, startFinish);
+            var wasInside = IsInCheckpoint(previousPosition, startCheckpoint);
+            var isInside = IsInCheckpoint(currentPosition, startCheckpoint);
 
             if (!wasInside && isInside)
             {
-                return (track, startFinish);
+                return (track, startCheckpoint);
             }
         }
         return (null, null);

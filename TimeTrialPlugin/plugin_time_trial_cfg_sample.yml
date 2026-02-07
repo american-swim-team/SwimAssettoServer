@@ -52,9 +52,9 @@ Tracks:
         Position: [2500.0, 8.0, 5500.0]
         Radius: 12.0
 
-  # Example: Add more tracks for your map
-  # - Id: "mountain_run"
-  #   Name: "Mountain Run"
+  # Example: Circular track (start and finish at same location)
+  # - Id: "mountain_loop"
+  #   Name: "Mountain Loop"
   #   Checkpoints:
   #     - Index: 0
   #       Type: StartFinish
@@ -63,4 +63,21 @@ Tracks:
   #     - Index: 1
   #       Type: Sector
   #       Position: [500.0, 75.0, 400.0]
+  #       Radius: 15.0
+
+  # Example: Point-to-point track (separate start and finish)
+  # - Id: "hill_climb"
+  #   Name: "Hill Climb"
+  #   Checkpoints:
+  #     - Index: 0
+  #       Type: Start
+  #       Position: [100.0, 10.0, 200.0]
+  #       Radius: 15.0
+  #     - Index: 1
+  #       Type: Sector
+  #       Position: [300.0, 30.0, 400.0]
+  #       Radius: 12.0
+  #     - Index: 2
+  #       Type: Finish
+  #       Position: [500.0, 80.0, 600.0]
   #       Radius: 15.0

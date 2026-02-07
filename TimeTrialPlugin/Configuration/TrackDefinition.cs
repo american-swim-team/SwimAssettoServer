@@ -19,6 +19,18 @@ public class TrackDefinition
     public CheckpointDefinition? StartFinish => Checkpoints.FirstOrDefault(c => c.Type == CheckpointType.StartFinish);
 
     [YamlIgnore]
+    public CheckpointDefinition? Start => Checkpoints.FirstOrDefault(c => c.Type == CheckpointType.Start);
+
+    [YamlIgnore]
+    public CheckpointDefinition? Finish => Checkpoints.FirstOrDefault(c => c.Type == CheckpointType.Finish);
+
+    [YamlIgnore]
+    public bool IsPointToPoint => Start != null && Finish != null;
+
+    [YamlIgnore]
+    public CheckpointDefinition? StartCheckpoint => StartFinish ?? Start;
+
+    [YamlIgnore]
     public int SectorCount => Checkpoints.Count(c => c.Type == CheckpointType.Sector);
 
     [YamlIgnore]

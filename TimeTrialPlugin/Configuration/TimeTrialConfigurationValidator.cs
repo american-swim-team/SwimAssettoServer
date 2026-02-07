@@ -19,8 +19,10 @@ public class TimeTrialConfigurationValidator : AbstractValidator<TimeTrialConfig
             track.RuleFor(t => t.Name).NotEmpty();
             track.RuleFor(t => t.Checkpoints).NotEmpty().WithMessage("Each track must have at least one checkpoint");
             track.RuleFor(t => t.Checkpoints)
-                .Must(checkpoints => checkpoints.Any(c => c.Type == CheckpointType.StartFinish))
-                .WithMessage("Each track must have a StartFinish checkpoint");
+                .Must(checkpoints =>
+                    checkpoints.Any(c => c.Type == CheckpointType.StartFinish) ||
+                    (checkpoints.Any(c => c.Type == CheckpointType.Start) && checkpoints.Any(c => c.Type == CheckpointType.Finish)))
+                .WithMessage("Each track must have either a StartFinish checkpoint OR both Start and Finish checkpoints");
 
             track.RuleForEach(t => t.Checkpoints).ChildRules(checkpoint =>
             {
