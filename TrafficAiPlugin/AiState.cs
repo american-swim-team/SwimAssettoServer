@@ -1106,6 +1106,79 @@ public class AiState : IAiState, IDisposable
         return true;
     }
 
+    private bool ValidateLaneChangeCurve(
+        Vector3 startPosition, Vector3 endPosition,
+        Vector3 startTangent, Vector3 endTangent,
+        int sourcePointId, int targetPointId, float laneChangeDistance)
+    {
+        var points = _spline.Points;
+        const float maxDeviationMeters = 8f;
+
+        for (int i = 1; i <= 3; i++)
+        {
+            float t = i * 0.25f;
+            Vector3 curvePos = CatmullRom.CalculatePosition(startPosition, endPosition, startTangent, endTangent, t);
+
+            // Find closest distance to source lane spline points
+            float minDistance = float.MaxValue;
+            float distanceTravelled = 0;
+            int checkId = sourcePointId;
+            while (distanceTravelled < laneChangeDistance && checkId >= 0)
+            {
+                float dist = Vector3.Distance(curvePos, points[checkId].Position);
+                if (dist < minDistance) minDistance = dist;
+                distanceTravelled += points[checkId].Length;
+                checkId = points[checkId].NextId;
+            }
+
+            // Find closest distance to target lane spline points
+            distanceTravelled = 0;
+            checkId = targetPointId;
+            while (distanceTravelled < laneChangeDistance && checkId >= 0)
+            {
+                float dist = Vector3.Distance(curvePos, points[checkId].Position);
+                if (dist < minDistance) minDistance = dist;
+                distanceTravelled += points[checkId].Length;
+                checkId = points[checkId].NextId;
+            }
+
+            if (minDistance > maxDeviationMeters)
+                return false;
+        }
+
+        return true;
+    }
+
+    private bool IsLaneChangePathStraightEnough(int sourcePointId, int targetPointId, float distance)
+    {
+        var points = _spline.Points;
+        const float minRadius = 200f;
+
+        // Check source lane points
+        float distanceTravelled = 0;
+        int checkId = sourcePointId;
+        while (distanceTravelled < distance && checkId >= 0)
+        {
+            if (points[checkId].Radius > 0 && points[checkId].Radius < minRadius)
+                return false;
+            distanceTravelled += points[checkId].Length;
+            checkId = points[checkId].NextId;
+        }
+
+        // Check target lane points
+        distanceTravelled = 0;
+        checkId = targetPointId;
+        while (distanceTravelled < distance && checkId >= 0)
+        {
+            if (points[checkId].Radius > 0 && points[checkId].Radius < minRadius)
+                return false;
+            distanceTravelled += points[checkId].Length;
+            checkId = points[checkId].NextId;
+        }
+
+        return true;
+    }
+
     private bool TryInitiateLaneChange(int targetPointId, bool isOvertake)
     {
         if (!IsTargetLaneClear(targetPointId, isOvertake))
@@ -1119,6 +1192,10 @@ public class AiState : IAiState, IDisposable
         float speedFactor = Math.Clamp(CurrentSpeed / _configuration.MaxSpeedMs, _configuration.LaneChangeSpeedFactorMin, _configuration.LaneChangeSpeedFactorMax);
         float laneChangeDistance = _configuration.LaneChangeMinDistanceMeters +
             ((_configuration.LaneChangeMaxDistanceMeters - _configuration.LaneChangeMinDistanceMeters) * speedFactor);
+
+        // Reject lane change if path goes through corners
+        if (!IsLaneChangePathStraightEnough(CurrentSplinePointId, targetPointId, laneChangeDistance))
+            return false;
 
         // Find target point ahead in target lane
         float distanceAhead = 0;
@@ -1143,6 +1220,11 @@ public class AiState : IAiState, IDisposable
         // Tangents: current direction and target lane direction, scaled by distance
         Vector3 startTangent = Vector3.Normalize(Status.Velocity.Length() > 0.1f ? Status.Velocity : _spline.GetForwardVector(CurrentSplinePointId)) * laneChangeDistance * 0.5f;
         Vector3 endTangent = Vector3.Normalize(_spline.GetForwardVector(endPointId)) * laneChangeDistance * 0.5f;
+
+        // Validate the curve doesn't deviate too far from the road
+        if (!ValidateLaneChangeCurve(startPosition, endPosition, startTangent, endTangent,
+                CurrentSplinePointId, targetPointId, laneChangeDistance))
+            return false;
 
         // Get camber values for interpolation
         float startCamber = _spline.Operations.GetCamber(CurrentSplinePointId);
@@ -1240,6 +1322,9 @@ public class AiState : IAiState, IDisposable
     {
         if (!_laneChange.IsChangingLane) return;
 
+        // If already aborting, don't re-abort
+        if (_laneChange.IsAborting) return;
+
         // Leave the target lane registration from initiation (the adjacent point, not the end point)
         if (_laneChangeTargetRegistrationPointId >= 0)
         {
@@ -1247,21 +1332,109 @@ public class AiState : IAiState, IDisposable
             _laneChangeTargetRegistrationPointId = -1;
         }
 
-        // Clean up source point tracking
+        // Capture current interpolated position/tangent for smooth return
+        Vector3 currentPosition = _laneChange.GetInterpolatedPosition();
+        Vector3 currentTangent = _laneChange.GetInterpolatedTangent();
+
+        // Find a return point on the source lane ahead of us
+        int sourcePointId = _laneChange.SourcePointId;
+        if (sourcePointId < 0)
+        {
+            // Fallback: hard abort if we can't find source lane
+            HardAbortLaneChange();
+            return;
+        }
+
+        var points = _spline.Points;
+        float returnDistance = Vector3.Distance(currentPosition, points[sourcePointId].Position);
+        float minReturnDistance = Math.Max(returnDistance, _configuration.LaneChangeMinDistanceMeters * 0.5f);
+
+        // Walk ahead in source lane to find a good return point
+        float distanceAhead = 0;
+        int returnPointId = sourcePointId;
+        while (distanceAhead < minReturnDistance && returnPointId >= 0)
+        {
+            distanceAhead += points[returnPointId].Length;
+            int nextId = points[returnPointId].NextId;
+            if (nextId < 0) break;
+            returnPointId = nextId;
+        }
+
+        if (returnPointId < 0)
+        {
+            HardAbortLaneChange();
+            return;
+        }
+
+        Vector3 returnPosition = points[returnPointId].Position;
+        Vector3 returnTangent = _spline.GetForwardVector(returnPointId);
+        float returnCamber = _spline.Operations.GetCamber(returnPointId);
+
+        _indicator = 0;
+
+        _laneChange.BeginAbortReturn(
+            currentPosition,
+            currentTangent,
+            returnPosition,
+            returnTangent,
+            returnPointId,
+            returnCamber);
+
+        Log.Verbose("AI {SessionId} smoothly aborting lane change, returning to source lane", EntryCarAi.EntryCar.SessionId);
+    }
+
+    private void HardAbortLaneChange()
+    {
         if (_laneChangeSourcePointId >= 0)
         {
-            // Leave the source point and re-enter current point
             _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
             _laneChangeSourcePointId = -1;
         }
 
-        // Reset junction evaluator to avoid stale state causing despawn
         _junctionEvaluator.Clear();
-
         _indicator = 0;
         _laneChange.Abort();
 
-        Log.Verbose("AI {SessionId} aborted lane change", EntryCarAi.EntryCar.SessionId);
+        Log.Verbose("AI {SessionId} hard-aborted lane change", EntryCarAi.EntryCar.SessionId);
+    }
+
+    private void FinalizeAbortReturn()
+    {
+        if (!_laneChange.IsAborting) return;
+
+        int returnPointId = _laneChange.TargetPointId;
+
+        // Clean up source point tracking
+        if (_laneChangeSourcePointId >= 0)
+        {
+            _spline.SlowestAiStates.Leave(_laneChangeSourcePointId, this);
+            _laneChangeSourcePointId = -1;
+        }
+
+        // Update current point to where we returned in the source lane
+        _spline.SlowestAiStates.Leave(_currentSplinePointId, this);
+        _currentSplinePointId = returnPointId;
+        _spline.SlowestAiStates.Enter(returnPointId, this);
+
+        // Reset junction evaluator for clean state
+        _junctionEvaluator.Clear();
+
+        // Recalculate tangents for source lane
+        if (!_junctionEvaluator.TryNext(CurrentSplinePointId, out var nextPointId))
+        {
+            Log.Debug("Car {SessionId} cannot find next point after abort return, despawning", EntryCarAi.EntryCar.SessionId);
+            _laneChange.Complete();
+            Despawn();
+            return;
+        }
+
+        _currentVecLength = (_spline.Points[nextPointId].Position - _spline.Points[CurrentSplinePointId].Position).Length();
+        _currentVecProgress = 0;
+        CalculateTangents();
+
+        _laneChange.Complete();
+
+        Log.Verbose("AI {SessionId} completed abort return to source lane at point {ReturnPoint}", EntryCarAi.EntryCar.SessionId, returnPointId);
     }
 
     /// <returns>0 is the rear <br/> Angle is counterclockwise</returns>
@@ -1315,14 +1488,19 @@ public class AiState : IAiState, IDisposable
             _laneChange.UpdateProgress(moveMeters);
 
             var laneChangePoint = _laneChange.GetInterpolatedPoint();
-            smoothPosition = laneChangePoint.Position;
+            // Override Y with linear interpolation to prevent floating on inclines/declines
+            float linearY = _laneChange.StartY + (_laneChange.EndY - _laneChange.StartY) * _laneChange.Progress;
+            smoothPosition = new Vector3(laneChangePoint.Position.X, linearY, laneChangePoint.Position.Z);
             smoothTangent = laneChangePoint.Tangent;
             camber = _laneChange.GetInterpolatedCamber();
 
             // Check if lane change is complete
             if (_laneChange.IsComplete)
             {
-                CompleteLaneChange();
+                if (_laneChange.IsAborting)
+                    FinalizeAbortReturn();
+                else
+                    CompleteLaneChange();
             }
         }
         else
@@ -1335,21 +1513,48 @@ public class AiState : IAiState, IDisposable
                 return;
             }
 
+            float t = _currentVecProgress / _currentVecLength;
+
             CatmullRom.CatmullRomPoint smoothPos = CatmullRom.Evaluate(ops.Points[CurrentSplinePointId].Position,
                 ops.Points[nextPoint].Position,
                 _startTangent,
                 _endTangent,
-                _currentVecProgress / _currentVecLength);
+                t);
 
-            smoothPosition = smoothPos.Position;
+            // Override Y with linear interpolation to prevent floating on inclines/declines
+            float linearY = ops.Points[CurrentSplinePointId].Position.Y * (1 - t)
+                          + ops.Points[nextPoint].Position.Y * t;
+            smoothPosition = new Vector3(smoothPos.Position.X, linearY, smoothPos.Position.Z);
             smoothTangent = smoothPos.Tangent;
-            camber = ops.GetCamber(CurrentSplinePointId, _currentVecProgress / _currentVecLength);
+            camber = ops.GetCamber(CurrentSplinePointId, t);
+        }
+
+        // Yaw from CatmullRom tangent (horizontal direction is correct)
+        float yaw = MathF.Atan2(smoothTangent.Z, smoothTangent.X) - MathF.PI / 2;
+
+        // Pitch from spline tangent Y components for correct road slope angle
+        float pitch;
+        if (_laneChange.IsChangingLane)
+        {
+            // During lane change, derive pitch from start/end height difference
+            float lcHeightDiff = _laneChange.EndY - _laneChange.StartY;
+            float lcHorizLength = new Vector2(smoothTangent.X, smoothTangent.Z).Length();
+            pitch = MathF.Atan2(lcHeightDiff / _laneChange.TotalDistance * lcHorizLength, lcHorizLength);
+        }
+        else
+        {
+            float startPitch = MathF.Atan2(_startTangent.Y,
+                new Vector2(_startTangent.X, _startTangent.Z).Length());
+            float endPitch = MathF.Atan2(_endTangent.Y,
+                new Vector2(_endTangent.X, _endTangent.Z).Length());
+            float t2 = _currentVecProgress / _currentVecLength;
+            pitch = startPitch + (endPitch - startPitch) * t2;
         }
 
         Vector3 rotation = new Vector3
         {
-            X = MathF.Atan2(smoothTangent.Z, smoothTangent.X) - MathF.PI / 2,
-            Y = (MathF.Atan2(new Vector2(smoothTangent.Z, smoothTangent.X).Length(), smoothTangent.Y) - MathF.PI / 2) * -1f,
+            X = yaw,
+            Y = pitch,
             Z = camber
         };
 
