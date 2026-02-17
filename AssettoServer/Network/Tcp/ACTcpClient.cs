@@ -662,7 +662,7 @@ public class ACTcpClient : IClient
         if (!passedChecksum)
         {
             ChecksumFailed?.Invoke(this, EventArgs.Empty);
-            if (HasSentFirstUpdate) KickForFailedChecksum();
+            KickForFailedChecksum();
         }
         else
         {
@@ -907,7 +907,7 @@ public class ACTcpClient : IClient
                     if (ChecksumStatus != ChecksumStatus.Succeeded && IsConnected)
                     {
                         Log.Information("Checksum request for {ClientName} ({SessionId}) timed out. Consider increasing PlayerChecksumTimeoutSeconds", Name, SessionId);
-                        await _entryCarManager.KickAsync(this, KickReason.ChecksumFailed, null, null, $"{Name} did not send the requested checksums.");
+                        await _entryCarManager.KickAsync(this, KickReason.ChecksumFailed, null, "You have been kicked: checksum verification failed.", $"{Name} did not send the requested checksums.");
                     }
                 });
             }
