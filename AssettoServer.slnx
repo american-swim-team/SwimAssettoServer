@@ -27,4 +27,5 @@
   <Project Path="TrafficAiPlugin\TrafficAiPlugin.csproj" Type="Classic C#" />
   <Project Path="TrafficAiPlugin.Shared\TrafficAiPlugin.Shared.csproj" Type="Classic C#" />
   <Project Path="TimeTrialPlugin\TimeTrialPlugin.csproj" Type="Classic C#" />
+  <Project Path="SwimGatePlugin\SwimGatePlugin.csproj" Type="Classic C#" />
 </Solution>
