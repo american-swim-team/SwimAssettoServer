@@ -505,7 +505,10 @@ public class ACTcpClient : IClient
                     }
 
                     if (!HasStartedHandshake)
+                    {
+                        await Task.Delay(500);
                         return;
+                    }
                 }
                 else if (HasStartedHandshake)
                 {
@@ -918,7 +921,7 @@ public class ACTcpClient : IClient
         }
     }
 
-    private void KickForFailedChecksum() => _ = _entryCarManager.KickAsync(this, KickReason.ChecksumFailed, null, null, $"{Name} failed the checksum check and has been kicked.");
+    private void KickForFailedChecksum() => _ = _entryCarManager.KickAsync(this, KickReason.ChecksumFailed, null, "You have been kicked: checksum verification failed.", $"{Name} failed the checksum check and has been kicked.");
 
     private LapCompletedOutgoing CreateLapCompletedPacket(byte sessionId, uint lapTime, int cuts)
     {
@@ -975,6 +978,13 @@ public class ACTcpClient : IClient
 
             OutgoingPacketChannel.Writer.TryComplete();
             _ = await Task.WhenAny(Task.Delay(2000), SendLoopTask);
+
+            try
+            {
+                TcpClient.Client.Shutdown(System.Net.Sockets.SocketShutdown.Send);
+                await Task.Delay(200);
+            }
+            catch { }
 
             try
             {
