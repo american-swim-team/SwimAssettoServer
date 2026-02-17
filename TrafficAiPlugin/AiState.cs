@@ -1215,6 +1215,7 @@ public class AiState : IAiState, IDisposable
 
         // Compute Catmull-Rom curve parameters
         Vector3 startPosition = Status.Position;
+        startPosition = startPosition with { Y = startPosition.Y - EntryCarAi.AiSplineHeightOffsetMeters };
         Vector3 endPosition = endPoint.Position;
 
         // Tangents: current direction and target lane direction, scaled by distance
@@ -1333,7 +1334,10 @@ public class AiState : IAiState, IDisposable
         }
 
         // Capture current interpolated position/tangent for smooth return
+        // Use linear Y to match the car's actual visual height (not CatmullRom Y)
         Vector3 currentPosition = _laneChange.GetInterpolatedPosition();
+        float abortLinearY = _laneChange.StartY + (_laneChange.EndY - _laneChange.StartY) * _laneChange.Progress;
+        currentPosition = currentPosition with { Y = abortLinearY };
         Vector3 currentTangent = _laneChange.GetInterpolatedTangent();
 
         // Find a return point on the source lane ahead of us
@@ -1541,14 +1545,36 @@ public class AiState : IAiState, IDisposable
             float lcHorizLength = new Vector2(smoothTangent.X, smoothTangent.Z).Length();
             pitch = MathF.Atan2(lcHeightDiff / _laneChange.TotalDistance * lcHorizLength, lcHorizLength);
         }
+        else if (_junctionEvaluator.TryNext(CurrentSplinePointId, out var pitchNextPoint))
+        {
+            // Pitch from actual segment slopes to match linear Y interpolation
+            float t2 = _currentVecProgress / _currentVecLength;
+
+            // Current segment slope: CurrentSplinePointId → pitchNextPoint
+            float curDy = ops.Points[pitchNextPoint].Position.Y - ops.Points[CurrentSplinePointId].Position.Y;
+            float curDxz = MathF.Sqrt(
+                MathF.Pow(ops.Points[pitchNextPoint].Position.X - ops.Points[CurrentSplinePointId].Position.X, 2) +
+                MathF.Pow(ops.Points[pitchNextPoint].Position.Z - ops.Points[CurrentSplinePointId].Position.Z, 2));
+            float currentSegPitch = MathF.Atan2(curDy, curDxz);
+
+            // Interpolate toward next segment slope for smooth transition at boundary
+            if (_junctionEvaluator.TryNext(pitchNextPoint, out var nextNextPoint))
+            {
+                float nextDy = ops.Points[nextNextPoint].Position.Y - ops.Points[pitchNextPoint].Position.Y;
+                float nextDxz = MathF.Sqrt(
+                    MathF.Pow(ops.Points[nextNextPoint].Position.X - ops.Points[pitchNextPoint].Position.X, 2) +
+                    MathF.Pow(ops.Points[nextNextPoint].Position.Z - ops.Points[pitchNextPoint].Position.Z, 2));
+                float nextSegPitch = MathF.Atan2(nextDy, nextDxz);
+                pitch = currentSegPitch + (nextSegPitch - currentSegPitch) * t2;
+            }
+            else
+            {
+                pitch = currentSegPitch;
+            }
+        }
         else
         {
-            float startPitch = MathF.Atan2(_startTangent.Y,
-                new Vector2(_startTangent.X, _startTangent.Z).Length());
-            float endPitch = MathF.Atan2(_endTangent.Y,
-                new Vector2(_endTangent.X, _endTangent.Z).Length());
-            float t2 = _currentVecProgress / _currentVecLength;
-            pitch = startPitch + (endPitch - startPitch) * t2;
+            pitch = 0;
         }
 
         Vector3 rotation = new Vector3
