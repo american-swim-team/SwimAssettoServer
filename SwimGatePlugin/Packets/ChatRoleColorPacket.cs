@@ -6,8 +6,8 @@ namespace SwimGatePlugin.Packets;
 [OnlineEvent(Key = "swimChatRoleColor")]
 public class ChatRoleColorPacket : OnlineEvent<ChatRoleColorPacket>
 {
-    [OnlineEventField(Name = "SessionId")]
-    public new int SessionId;
+    [OnlineEventField(Name = "CarIndex")]
+    public int CarIndex;
 
     [OnlineEventField(Name = "Color")]
     public Color Color;

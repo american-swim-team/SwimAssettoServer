@@ -88,7 +88,7 @@ public class SwimChatService : IHostedService
                 var color = GetColorForSession(car.SessionId);
                 var packet = new ChatRoleColorPacket
                 {
-                    SessionId = car.SessionId,
+                    CarIndex = car.SessionId,
                     Color = color
                 };
                 sender.SendPacket(packet);
@@ -99,7 +99,7 @@ public class SwimChatService : IHostedService
         var newColor = GetColorForSession(sender.SessionId);
         var broadcastPacket = new ChatRoleColorPacket
         {
-            SessionId = sender.SessionId,
+            CarIndex = sender.SessionId,
             Color = newColor
         };
         _entryCarManager.BroadcastPacket(broadcastPacket);
@@ -124,25 +124,11 @@ public class SwimChatService : IHostedService
 
     private void OnChatMessageReceived(ACTcpClient sender, ChatEventArgs args)
     {
-        _clientRoles.TryGetValue(sender.SessionId, out var role);
-
-        bool hasPrefix = role != null && !string.IsNullOrEmpty(role.Prefix);
-        bool hasFilter = _profanityFilter != null;
-
-        if (!hasPrefix && !hasFilter)
+        if (_profanityFilter == null)
             return;
 
-        string message = args.Message;
+        string message = _profanityFilter.Filter(args.Message);
 
-        // Apply profanity filter
-        if (hasFilter)
-            message = _profanityFilter!.Filter(message);
-
-        // Prepend role prefix
-        if (hasPrefix)
-            message = $"{role!.Prefix} {message}";
-
-        // Only cancel+rebroadcast if message actually changed
         if (message == args.Message)
             return;
 

@@ -22,7 +22,6 @@ public class ChatRoleConfig
 {
     public string Role { get; init; } = "";
     public string Color { get; init; } = "#FFFFFF";
-    public string Prefix { get; init; } = "";
     public int Priority { get; init; } = 100;
 }
 
