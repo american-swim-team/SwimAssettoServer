@@ -56,7 +56,8 @@ public class SwimCrashHandler : BackgroundService
         sender.Collision -= OnCollision;
         sender.EntryCar.PositionUpdateReceived -= OnPositionUpdateReceived;
 
-        if (CarStates.TryGetValue(sender.Guid, out var state) && state.WaitingForReEnable)
+        if (CarStates.TryGetValue(sender.Guid, out var state)
+            && (state.WaitingForReEnable || state.StoppedCollisionsDisabled))
         {
             sender.EntryCar.SetCollisions(true);
         }
@@ -100,8 +101,6 @@ public class SwimCrashHandler : BackgroundService
 
     private void OnCollision(ACTcpClient? sender, CollisionEventArgs e) {
         if (e.Speed < config.SpeedThreshold) {
-            Log.Debug("SwimCrash: Collision below speed threshold ({Speed} < {Threshold}), sender={Sender}",
-                e.Speed, config.SpeedThreshold, sender?.Name ?? "null");
             return;
         }
 
@@ -122,9 +121,6 @@ public class SwimCrashHandler : BackgroundService
 
         var state = CarStates[targetGuid.Value];
 
-        Log.Information("SwimCrash: Collision for {Client}, speed={Speed}, historyEntries={Count}, WaitingForReEnable={Waiting}",
-            targetEntryCar.Client?.Name, e.Speed, state.RotationHistory.Count, state.WaitingForReEnable);
-
         if (state.WaitingForReEnable)
         {
             state.LastCollisionWhileWaiting = _sessionManager.ServerTimeMilliseconds;
@@ -135,9 +131,6 @@ public class SwimCrashHandler : BackgroundService
         // before this collision event was reported (up to 5s delay)
         var (accX, accY) = ComputeAccumulatedRotation(state, HistoryWindowMs);
 
-        Log.Information("SwimCrash: Retroactive check for {Client}: accX={AccX:F3} accY={AccY:F3} (thresholds: spin={SpinT} flip={FlipT})",
-            targetEntryCar.Client?.Name, accX, accY, config.SpinThreshold, config.FlipThreshold);
-
         if (accX > config.SpinThreshold || accY > config.FlipThreshold)
         {
             TriggerCrashReset(targetEntryCar, state);
@@ -147,7 +140,6 @@ public class SwimCrashHandler : BackgroundService
         // Spin hasn't happened yet (or was too small) - monitor going forward
         state.MonitorGrip = true;
         state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
-        Log.Information("SwimCrash: Forward monitoring started for {Client}", targetEntryCar.Client?.Name);
     }
 
     private static float WrapAngle(float delta)
@@ -183,7 +175,7 @@ public class SwimCrashHandler : BackgroundService
             state.RotationHistory.Dequeue();
         }
 
-        // Handle re-enable logic
+        // Handle crash re-enable logic
         if (state.WaitingForReEnable)
         {
             if (now - state.CollisionsDisabledTime > config.MaxNoCollisionTimeMs)
@@ -205,24 +197,55 @@ public class SwimCrashHandler : BackgroundService
             return;
         }
 
+        // Stopped player collision disable
+        if (config.StoppedSpeedThreshold.HasValue)
+        {
+            float speed = positionUpdate.Velocity.Length();
+
+            if (state.StoppedCollisionsDisabled)
+            {
+                if (speed >= config.StoppedSpeedThreshold.Value)
+                {
+                    e.SetCollisions(true);
+                    state.StoppedCollisionsDisabled = false;
+                    state.StoppedSince = 0;
+                    Log.Information("Re-enabled collisions for {client} (no longer stopped)", e.Client.Name);
+                }
+                return;
+            }
+
+            if (speed < config.StoppedSpeedThreshold.Value)
+            {
+                if (state.StoppedSince == 0)
+                {
+                    state.StoppedSince = now;
+                }
+                else if (now - state.StoppedSince > (config.StoppedTimeBeforeDisableMs ?? 5000))
+                {
+                    e.SetCollisions(false);
+                    state.StoppedCollisionsDisabled = true;
+                    Log.Information("Disabled collisions for {client} (stopped on road)", e.Client.Name);
+                    return;
+                }
+            }
+            else
+            {
+                state.StoppedSince = 0;
+            }
+        }
+
         // Forward monitoring after collision event arrived
         if (!state.MonitorGrip) {
             return;
         }
 
         if (now - state.LastCollisionTime > config.MonitorTime) {
-            var (finalAccX, finalAccY) = ComputeAccumulatedRotation(state, config.MonitorTime ?? 2500);
-            Log.Information("SwimCrash: Monitoring timed out for {Client} without triggering. Final accX={AccX:F3} accY={AccY:F3}",
-                e.Client.Name, finalAccX, finalAccY);
             state.MonitorGrip = false;
             return;
         }
 
         // Check accumulated rotation over the monitoring window
         var (accX, accY) = ComputeAccumulatedRotation(state, config.MonitorTime ?? 2500);
-
-        Log.Debug("SwimCrash: Monitoring {Client}: accX={AccX:F3} accY={AccY:F3} rot=({RotX:F3},{RotY:F3},{RotZ:F3})",
-            e.Client.Name, accX, accY, positionUpdate.Rotation.X, positionUpdate.Rotation.Y, positionUpdate.Rotation.Z);
 
         if (accX > config.SpinThreshold || accY > config.FlipThreshold)
         {
@@ -245,4 +268,7 @@ class CarState {
     public bool WaitingForReEnable;
     public long CollisionsDisabledTime;
     public long LastCollisionWhileWaiting;
+
+    public long StoppedSince;
+    public bool StoppedCollisionsDisabled;
 }

@@ -14,4 +14,6 @@ public class SwimCrashConfiguration : IValidateConfiguration<SwimCrashConfigurat
     public float? CruisingSpeedThreshold { get; init; }
     public int? ReEnableCooldownMs { get; init; }
     public int? MaxNoCollisionTimeMs { get; init; }
+    public float? StoppedSpeedThreshold { get; init; }
+    public int? StoppedTimeBeforeDisableMs { get; init; }
 }

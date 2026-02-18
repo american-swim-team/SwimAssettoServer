@@ -38,7 +38,8 @@ Any modifications to the code made by the licensed individuals must be clearly d
 outside organizations or individuals must be approved in writing by the licensed individuals before they can be
 distributed or used.
 
-]]--
+]]
+--
 
 local sim = ac.getSim()
 local uiState = ac.getUI()
@@ -51,8 +52,8 @@ ac.debug("Server slot:", slot)
 
 local resetEvent = ac.OnlineEvent({
     ac.StructItem.key("SW_ResetCar"),
-    target = ac.StructItem.byte()
-}, function (sender, message)
+    target = ac.StructItem.byte(),
+}, function(sender, message)
     resetEvents = resetEvents + 1
     ac.debug("Resets", resetEvents)
     if slot == message.target then
@@ -72,7 +73,7 @@ end
 function script.drawUI()
     ui.transparentWindow("swimCrash", vec2(uiState.windowSize.x / 2 - 83, 80), vec2(166, 159), function()
         if iconDisplayTimer then
-            ui.drawImage("http://static.romedius.xyz/car-crash-icon.png", vec2(0, 0), vec2(166, 159))
+            ui.drawImage("http://static.swimserver.com/car-crash-icon.png", vec2(0, 0), vec2(166, 159))
         end
     end)
 end
