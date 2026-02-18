@@ -505,7 +505,7 @@ public class AiState : IAiState, IDisposable
 
         foreach (var car in _entryCarManager.EntryCars) {
 
-            if (!ignorePlayer && car.Client?.HasSentFirstUpdate == true) {
+            if (!ignorePlayer && car.Client?.HasSentFirstUpdate == true && car.EnableCollisions) {
                 Vector3 futurePosition = car.Status.Position + car.Status.Velocity * timeHorizon;
                 if (futurePosition.X > left && futurePosition.X < right && futurePosition.Z > back && futurePosition.Z < front) {
                     return false;
@@ -551,7 +551,7 @@ public class AiState : IAiState, IDisposable
             for (var i = 0; i < _entryCarManager.EntryCars.Length; i++)
             {
                 var playerCar = _entryCarManager.EntryCars[i];
-                if (playerCar.Client?.HasSentFirstUpdate == true)
+                if (playerCar.Client?.HasSentFirstUpdate == true && playerCar.EnableCollisions)
                 {
                     float distance = Vector3.DistanceSquared(playerCar.Status.Position, Status.Position);
 
@@ -945,7 +945,7 @@ public class AiState : IAiState, IDisposable
             var targetPosition = targetPoint.Position;
             foreach (var car in _entryCarManager.EntryCars)
             {
-                if (car.Client?.HasSentFirstUpdate == true)
+                if (car.Client?.HasSentFirstUpdate == true && car.EnableCollisions)
                 {
                     Vector3 futurePosition = car.Status.Position + car.Status.Velocity * timeHorizon;
                     float distanceSquared = Vector3.DistanceSquared(futurePosition, targetPosition);

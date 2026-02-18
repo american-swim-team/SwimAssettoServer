@@ -1,20 +1,20 @@
 -- Coded by Romedius
 --[[
-                                    __     
-                   __              /\ `\   
-  ____  __  __  __/\_\    ___ ___  \ `\ `\ 
+                                    __
+                   __              /\ `\
+  ____  __  __  __/\_\    ___ ___  \ `\ `\
  /',__\/\ \/\ \/\ \/\ \ /' __` __`\ `\ >  >
-/\__, `\ \ \_/ \_/ \ \ \/\ \/\ \/\ \  /  / 
-\/\____/\ \___x___/'\ \_\ \_\ \_\ \_\/\_/  
- \/___/  \/__//__/   \/_/\/_/\/_/\/_/\//   
-                                           
-                                           
+/\__, `\ \ \_/ \_/ \ \ \/\ \/\ \/\ \  /  /
+\/\____/\ \___x___/'\ \_\ \_\ \_\ \_\/\_/
+ \/___/  \/__//__/   \/_/\/_/\/_/\/_/\//
+
+
 Custom License
 
 This software is licensed to wheres981 and romedius.
 This software is the intellectual property of the aforementioned individuals.
 
-The licensed individuals are free to distribute, modify, and use the software internally in any organization they are 
+The licensed individuals are free to distribute, modify, and use the software internally in any organization they are
 both members of.
 These two individuals may use and modify the code, only distributing the code at each other's discretion.
 
@@ -40,11 +40,10 @@ distributed or used.
 
 ]]--
 
-local resetTimer = {
-}
 local sim = ac.getSim()
 local uiState = ac.getUI()
 local resetEvents = 0
+local iconDisplayTimer = nil
 
 -- get players server slot
 local slot = ac.getCar(0).sessionID
@@ -57,35 +56,22 @@ local resetEvent = ac.OnlineEvent({
     resetEvents = resetEvents + 1
     ac.debug("Resets", resetEvents)
     if slot == message.target then
-        for i, car in ac.iterateCars.serverSlots() do
-            physics.disableCarCollisions(car.index, true)
-            resetTimer[car.index] = 0
-        end
-    else
-        for i, car in ac.iterateCars.ordered() do
-            if car.sessionID == message.target then
-                physics.disableCarCollisions(car.index, true)
-                resetTimer[car.index] = 0
-            end
-        end
+        iconDisplayTimer = 0
     end
-    ac.debug("Reset Timer", resetTimer)
 end)
 
 function script.update(dt)
-    for car, time in pairs(resetTimer) do
-        resetTimer[car] = time + dt
-        if time > 10 then
-            physics.disableCarCollisions(car, false)
-            resetTimer[car] = nil
+    if iconDisplayTimer then
+        iconDisplayTimer = iconDisplayTimer + dt
+        if iconDisplayTimer > 10 then
+            iconDisplayTimer = nil
         end
     end
-    ac.debug("Reset Timer", resetTimer)
 end
 
 function script.drawUI()
     ui.transparentWindow("swimCrash", vec2(uiState.windowSize.x / 2 - 83, 80), vec2(166, 159), function()
-        if resetTimer[0] then
+        if iconDisplayTimer then
             ui.drawImage("http://static.romedius.xyz/car-crash-icon.png", vec2(0, 0), vec2(166, 159))
         end
     end)

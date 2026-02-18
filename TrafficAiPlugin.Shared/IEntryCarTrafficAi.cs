@@ -9,5 +9,6 @@ public interface IEntryCarTrafficAi
     
     public void SetAiOverbooking(int count);
     public bool TryResetPosition();
+    public bool TryTeleportToSpline();
     public void AiUpdate();
 }

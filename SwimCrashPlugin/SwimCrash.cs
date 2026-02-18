@@ -11,13 +11,6 @@ using TrafficAiPlugin.Shared;
 
 namespace SwimCrashPlugin;
 
-[OnlineEvent(Key = "noCollision")]
-public class noCollision : OnlineEvent<noCollision>
-{
-    [OnlineEventField(Name = "entryCar")]
-    public int EntryCar;
-}
-
 public class SwimCrashHandler : BackgroundService
 {
     private readonly SwimCrashConfiguration config;
@@ -34,7 +27,7 @@ public class SwimCrashHandler : BackgroundService
 
         using var streamReader = new StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream("SwimCrashPlugin.lua.swimcrash.lua")!);
         scriptProvider.AddScript(streamReader.ReadToEnd(), "swimcrash.lua");
-        
+
         config = configuration;
 
         _sessionManager = sessionManager;
@@ -57,6 +50,12 @@ public class SwimCrashHandler : BackgroundService
         Log.Verbose("Client unregistered for collision management");
         sender.Collision -= OnCollision;
         sender.EntryCar.PositionUpdateReceived -= OnPositionUpdateReceived;
+
+        if (CarStates.TryGetValue(sender.Guid, out var state) && state.WaitingForReEnable)
+        {
+            sender.EntryCar.SetCollisions(true);
+        }
+
         CarStates.Remove(sender.Guid);
     }
 
@@ -65,22 +64,41 @@ public class SwimCrashHandler : BackgroundService
             return;
         }
 
+        EntryCar? targetEntryCar = null;
+        ulong? targetGuid = null;
+
         if (sender == null) {
             if (e.TargetCar == null || e.TargetCar.Client == null) {
                 Log.Verbose("No client found. Ignoring collision. No TargetCar and no sender.");
                 return;
-            } else {
-                var state = CarStates[e.TargetCar.Client.Guid];
-                state.MonitorGrip = true;
-                state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
-                CarStates[e.TargetCar.Client.Guid] = state;
             }
+            targetEntryCar = e.TargetCar;
+            targetGuid = e.TargetCar.Client.Guid;
         } else {
-            var state = CarStates[sender.Guid];
-            state.MonitorGrip = true;
-            state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
-            CarStates[sender.Guid] = state;
+            targetEntryCar = sender.EntryCar;
+            targetGuid = sender.Guid;
         }
+
+        var state = CarStates[targetGuid.Value];
+
+        if (state.WaitingForReEnable)
+        {
+            state.LastCollisionWhileWaiting = _sessionManager.ServerTimeMilliseconds;
+            return;
+        }
+
+        state.MonitorGrip = true;
+        state.LastCollisionTime = _sessionManager.ServerTimeMilliseconds;
+        state.PreviousRotation = null;
+        state.AccumulatedRotationX = 0;
+        state.AccumulatedRotationY = 0;
+    }
+
+    private static float WrapAngle(float delta)
+    {
+        while (delta > MathF.PI) delta -= 2 * MathF.PI;
+        while (delta < -MathF.PI) delta += 2 * MathF.PI;
+        return delta;
     }
 
     private void OnPositionUpdateReceived(EntryCar e, in PositionUpdateIn positionUpdate) {
@@ -88,8 +106,29 @@ public class SwimCrashHandler : BackgroundService
             Log.Verbose("No client found. Ignoring position update.");
             return;
         }
-        
+
         var state = CarStates[e.Client.Guid];
+
+        if (state.WaitingForReEnable)
+        {
+            if (_sessionManager.ServerTimeMilliseconds - state.CollisionsDisabledTime > config.MaxNoCollisionTimeMs)
+            {
+                e.SetCollisions(true);
+                state.WaitingForReEnable = false;
+                Log.Verbose("Force re-enabled collisions for {client} (max time exceeded)", e.Client.Name);
+                return;
+            }
+
+            if (positionUpdate.Velocity.Length() >= config.CruisingSpeedThreshold
+                && _sessionManager.ServerTimeMilliseconds - state.LastCollisionWhileWaiting > config.ReEnableCooldownMs)
+            {
+                e.SetCollisions(true);
+                state.WaitingForReEnable = false;
+                Log.Verbose("Re-enabled collisions for {client} (cruising speed reached)", e.Client.Name);
+            }
+
+            return;
+        }
 
         if (!state.MonitorGrip) {
             return;
@@ -97,48 +136,48 @@ public class SwimCrashHandler : BackgroundService
 
         if (_sessionManager.ServerTimeMilliseconds - state.LastCollisionTime > config.MonitorTime) {
             state.MonitorGrip = false;
-            CarStates[e.Client.Guid] = state;
+            state.PreviousRotation = null;
+            state.AccumulatedRotationX = 0;
+            state.AccumulatedRotationY = 0;
             return;
         }
 
-        if (state.MonitorGrip) {
-            if (state.FirstUpdate == null) {
-                state.FirstUpdate = positionUpdate;
-            }
-            else if (state.FirstUpdate.HasValue) {
-                if (IsCarOutOfControl(positionUpdate, state.FirstUpdate.Value)) {
-                    // Send no collision event
-                    state.MonitorGrip = false;
-                    CarStates[e.Client.Guid] = state;
-                    _entryCarManager.BroadcastPacket(new ResetCarPacket
-                    {
-                        Target = e.Client.SessionId
-                    });
-                    _trafficAi?.GetAiCarBySessionId(e.SessionId).TryResetPosition();
-                    Log.Verbose("Reset {client} due to spinning", e.Client.Name);
-                }
-            }
+        if (state.PreviousRotation == null) {
+            state.PreviousRotation = positionUpdate.Rotation;
+            return;
         }
 
-        CarStates[e.Client.Guid] = state;
-    }
+        float deltaX = WrapAngle(positionUpdate.Rotation.X - state.PreviousRotation.Value.X);
+        float deltaY = WrapAngle(positionUpdate.Rotation.Y - state.PreviousRotation.Value.Y);
+        state.AccumulatedRotationX += MathF.Abs(deltaX);
+        state.AccumulatedRotationY += MathF.Abs(deltaY);
+        state.PreviousRotation = positionUpdate.Rotation;
 
-    private bool IsCarOutOfControl(PositionUpdateIn current, PositionUpdateIn previous)
-    {
-        Vector3 movementDirection = Vector3.Subtract(previous.Rotation, current.Rotation);
+        bool inSpin = state.AccumulatedRotationX > config.SpinThreshold;
+        bool inFlip = state.AccumulatedRotationY > config.FlipThreshold;
 
-        // Check if spinning
-        Log.Verbose("Movement Direction: {movementDirection}",  MathF.Abs(movementDirection.X));
-        bool inSpin = MathF.Abs(movementDirection.X) > config.SpinThreshold;
+        Log.Verbose("Accumulated rotation X={rotX} Y={rotY} (thresholds: spin={spinT} flip={flipT})",
+            state.AccumulatedRotationX, state.AccumulatedRotationY, config.SpinThreshold, config.FlipThreshold);
 
-        // Check if flipping
-        Log.Verbose("Movement Direction: {movementDirection}",  MathF.Abs(movementDirection.Y));
-        bool inFlip = MathF.Abs(movementDirection.Y) > config.FlipThreshold;
+        if (inSpin || inFlip)
+        {
+            state.MonitorGrip = false;
+            state.PreviousRotation = null;
+            state.AccumulatedRotationX = 0;
+            state.AccumulatedRotationY = 0;
 
-        bool outOfControl = inSpin || inFlip;
-        Log.Verbose("Out of Control Check: {movementDirection}, {inSpin}, {inFlip}", movementDirection, inSpin, inFlip);
+            e.SetCollisions(false);
+            state.WaitingForReEnable = true;
+            state.CollisionsDisabledTime = _sessionManager.ServerTimeMilliseconds;
+            state.LastCollisionWhileWaiting = _sessionManager.ServerTimeMilliseconds;
 
-        return outOfControl;
+            _entryCarManager.BroadcastPacket(new ResetCarPacket
+            {
+                Target = e.Client.SessionId
+            });
+            _trafficAi?.GetAiCarBySessionId(e.SessionId).TryTeleportToSpline();
+            Log.Verbose("Reset {client} due to spinning", e.Client.Name);
+        }
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -147,8 +186,14 @@ public class SwimCrashHandler : BackgroundService
     }
 }
 
-struct CarState {
-    public long LastCollisionTime { get; set; }
-    public bool MonitorGrip { get; set; }
-    public PositionUpdateIn? FirstUpdate { get; set; }
+class CarState {
+    public long LastCollisionTime;
+    public bool MonitorGrip;
+    public Vector3? PreviousRotation;
+    public float AccumulatedRotationX;
+    public float AccumulatedRotationY;
+
+    public bool WaitingForReEnable;
+    public long CollisionsDisabledTime;
+    public long LastCollisionWhileWaiting;
 }

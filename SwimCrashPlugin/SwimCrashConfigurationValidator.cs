@@ -14,5 +14,8 @@ public class SwimCrashConfigurationValidator : AbstractValidator<SwimCrashConfig
         RuleFor(x => x.SpeedThreshold).NotEmpty().WithMessage("SpeedThreshold must be set");
         RuleFor(x => x.FlipThreshold).NotEmpty().WithMessage("FlipThreshold must be set");
         RuleFor(x => x.MonitorTime).NotEmpty().WithMessage("MonitorTime must be set");
+        RuleFor(x => x.CruisingSpeedThreshold).NotEmpty().WithMessage("CruisingSpeedThreshold must be set");
+        RuleFor(x => x.ReEnableCooldownMs).NotEmpty().WithMessage("ReEnableCooldownMs must be set");
+        RuleFor(x => x.MaxNoCollisionTimeMs).NotEmpty().WithMessage("MaxNoCollisionTimeMs must be set");
     }
 }

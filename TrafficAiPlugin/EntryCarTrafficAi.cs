@@ -419,6 +419,31 @@ public class EntryCarTrafficAi : IEntryCarTrafficAi
         return true;
     }
 
+    public bool TryTeleportToSpline()
+    {
+        if (_sessionManager.ServerTimeMilliseconds < _sessionManager.CurrentSession.StartTimeMilliseconds + 20_000
+            || (_sessionManager.ServerTimeMilliseconds > _sessionManager.CurrentSession.EndTimeMilliseconds
+                && _sessionManager.CurrentSession.EndTimeMilliseconds > 0))
+            return false;
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(250);
+
+            var (splinePointId, _) = _aiSpline.WorldToSpline(EntryCar.Status.Position);
+
+            var splinePoint = _aiSpline.Points[splinePointId];
+
+            var position = splinePoint.Position;
+            var direction = - _aiSpline.Operations.GetForwardVector(splinePoint.NextId);
+
+            EntryCar.Client?.SendTeleportCarPacket(position, direction);
+        });
+
+        EntryCar.Logger.Information("Teleported {Player} ({SessionId}) to spline", EntryCar.Client?.Name, EntryCar.Client?.SessionId);
+        return true;
+    }
+
     public bool GetPositionUpdateForCar(EntryCar toCar, out PositionUpdateOut positionUpdateOut)
     {
         CarStatus targetCarStatus;
