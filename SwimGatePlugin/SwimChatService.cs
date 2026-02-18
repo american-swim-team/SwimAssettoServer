@@ -1,0 +1,163 @@
+using System.Collections.Concurrent;
+using System.Drawing;
+using System.Reflection;
+using AssettoServer.Commands;
+using AssettoServer.Network.Tcp;
+using AssettoServer.Server;
+using AssettoServer.Shared.Network.Packets.Shared;
+using Microsoft.Extensions.Hosting;
+using Serilog;
+using SwimGatePlugin.Packets;
+
+namespace SwimGatePlugin;
+
+public class SwimChatService : IHostedService
+{
+    private readonly SwimGateConfiguration _config;
+    private readonly SwimApiClient _apiClient;
+    private readonly EntryCarManager _entryCarManager;
+    private readonly ChatService _chatService;
+    private readonly ProfanityFilter? _profanityFilter;
+    private readonly List<ChatRoleConfig> _sortedRoles;
+    private readonly ConcurrentDictionary<byte, ChatRoleConfig?> _clientRoles = new();
+
+    public SwimChatService(
+        SwimGateConfiguration config,
+        SwimApiClient apiClient,
+        EntryCarManager entryCarManager,
+        ChatService chatService,
+        CSPServerScriptProvider scriptProvider)
+    {
+        _config = config;
+        _apiClient = apiClient;
+        _entryCarManager = entryCarManager;
+        _chatService = chatService;
+
+        _sortedRoles = config.ChatRoles.OrderBy(r => r.Priority).ToList();
+
+        if (config.ProfanityFilter.Enabled)
+            _profanityFilter = new ProfanityFilter(config.ProfanityFilter);
+
+        if (_sortedRoles.Count > 0)
+        {
+            scriptProvider.AddScript(
+                Assembly.GetExecutingAssembly().GetManifestResourceStream("SwimGatePlugin.lua.chatroles.lua")!,
+                "chatroles.lua");
+        }
+
+        _entryCarManager.ClientConnected += OnClientConnected;
+        _chatService.MessageReceived += OnChatMessageReceived;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private void OnClientConnected(ACTcpClient sender, EventArgs args)
+    {
+        sender.LuaReady += OnLuaReady;
+        sender.Disconnecting += OnDisconnecting;
+
+        // Resolve role for this client
+        var (success, roles) = _apiClient.GetRolesAsync(sender.Guid).GetAwaiter().GetResult();
+        ChatRoleConfig? resolved = null;
+
+        if (success)
+        {
+            resolved = _sortedRoles.FirstOrDefault(cr =>
+                roles.Contains(cr.Role, StringComparer.OrdinalIgnoreCase));
+        }
+
+        _clientRoles[sender.SessionId] = resolved;
+    }
+
+    private void OnDisconnecting(ACTcpClient sender, EventArgs args)
+    {
+        _clientRoles.TryRemove(sender.SessionId, out _);
+    }
+
+    private void OnLuaReady(ACTcpClient sender, EventArgs args)
+    {
+        if (_sortedRoles.Count == 0)
+            return;
+
+        // Send all existing clients' colors to the newly ready client
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (car.Client is { HasSentFirstUpdate: true })
+            {
+                var color = GetColorForSession(car.SessionId);
+                var packet = new ChatRoleColorPacket
+                {
+                    SessionId = car.SessionId,
+                    Color = color
+                };
+                sender.SendPacket(packet);
+            }
+        }
+
+        // Send the new client's color to all existing clients
+        var newColor = GetColorForSession(sender.SessionId);
+        var broadcastPacket = new ChatRoleColorPacket
+        {
+            SessionId = sender.SessionId,
+            Color = newColor
+        };
+        _entryCarManager.BroadcastPacket(broadcastPacket);
+    }
+
+    private Color GetColorForSession(byte sessionId)
+    {
+        if (_clientRoles.TryGetValue(sessionId, out var role) && role != null)
+        {
+            try
+            {
+                return ColorTranslator.FromHtml(role.Color);
+            }
+            catch
+            {
+                return Color.White;
+            }
+        }
+
+        return Color.White;
+    }
+
+    private void OnChatMessageReceived(ACTcpClient sender, ChatEventArgs args)
+    {
+        _clientRoles.TryGetValue(sender.SessionId, out var role);
+
+        bool hasPrefix = role != null && !string.IsNullOrEmpty(role.Prefix);
+        bool hasFilter = _profanityFilter != null;
+
+        if (!hasPrefix && !hasFilter)
+            return;
+
+        string message = args.Message;
+
+        // Apply profanity filter
+        if (hasFilter)
+            message = _profanityFilter!.Filter(message);
+
+        // Prepend role prefix
+        if (hasPrefix)
+            message = $"{role!.Prefix} {message}";
+
+        // Only cancel+rebroadcast if message actually changed
+        if (message == args.Message)
+            return;
+
+        args.Cancel = true;
+
+        var chatMsg = new ChatMessage
+        {
+            SessionId = sender.SessionId,
+            Message = message
+        };
+
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (car.Client is { HasSentFirstUpdate: true })
+                car.Client.SendPacket(chatMsg);
+        }
+    }
+}

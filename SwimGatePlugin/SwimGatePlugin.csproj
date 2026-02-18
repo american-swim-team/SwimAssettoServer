@@ -21,4 +21,7 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="lua\chatroles.lua" />
+  </ItemGroup>
 </Project>
