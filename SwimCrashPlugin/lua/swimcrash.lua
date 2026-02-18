@@ -50,6 +50,27 @@ ac.debug("Server slot:", slot)
 
 -- track which session IDs have collisions disabled
 local collisionDisabledCars = {}
+local inPits = false
+
+local function findCarIndexBySessionID(sessionID)
+    local sim = ac.getSim()
+    for i = 0, sim.carsCount - 1 do
+        if ac.getCar(i).sessionID == sessionID then
+            return i
+        end
+    end
+    return nil
+end
+
+local function setAllHighlights(color)
+    local sim = ac.getSim()
+    for sessionID, _ in pairs(collisionDisabledCars) do
+        local carIndex = findCarIndexBySessionID(sessionID)
+        if carIndex and carIndex ~= 0 then
+            ac.highlightCar(carIndex, color)
+        end
+    end
+end
 
 ac.OnlineEvent({
     ac.StructItem.key("SW_CollisionState"),
@@ -58,23 +79,35 @@ ac.OnlineEvent({
 }, function(sender, message)
     if message.enabled == 0 then
         collisionDisabledCars[message.target] = true
+        if not inPits then
+            local carIndex = findCarIndexBySessionID(message.target)
+            if carIndex and carIndex ~= 0 then
+                ac.highlightCar(carIndex, highlightColor)
+            end
+        end
     else
         collisionDisabledCars[message.target] = nil
+        local carIndex = findCarIndexBySessionID(message.target)
+        if carIndex and carIndex ~= 0 then
+            ac.highlightCar(carIndex, nil)
+        end
     end
     ac.debug("Collision disabled cars", table.nkeys(collisionDisabledCars))
 end)
 
 function script.update(dt)
-    local sim = ac.getSim()
-    for i = 0, sim.carsCount - 1 do
-        local car = ac.getCar(i)
-        if i ~= 0 and collisionDisabledCars[car.sessionID] then
-            ac.highlightCar(i, highlightColor)
-        end
+    local wasInPits = inPits
+    inPits = ac.getCar(0).isInPitlane
+
+    if inPits and not wasInPits then
+        setAllHighlights(nil)
+    elseif not inPits and wasInPits then
+        setAllHighlights(highlightColor)
     end
 end
 
 function script.drawUI()
+    if inPits then return end
     ui.transparentWindow("swimCrash", vec2(uiState.windowSize.x / 2 - 83, 80), vec2(166, 159), function()
         if collisionDisabledCars[slot] then
             ui.drawImage("http://static.swimserver.com/car-crash-icon.png", vec2(0, 0), vec2(166, 159))
