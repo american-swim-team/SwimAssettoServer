@@ -504,11 +504,6 @@ public class ACTcpClient : IClient
                         });
                     }
 
-                    if (!HasStartedHandshake)
-                    {
-                        await Task.Delay(500);
-                        return;
-                    }
                 }
                 else if (HasStartedHandshake)
                 {
@@ -978,13 +973,6 @@ public class ACTcpClient : IClient
 
             OutgoingPacketChannel.Writer.TryComplete();
             _ = await Task.WhenAny(Task.Delay(2000), SendLoopTask);
-
-            try
-            {
-                TcpClient.Client.Shutdown(System.Net.Sockets.SocketShutdown.Send);
-                await Task.Delay(200);
-            }
-            catch { }
 
             try
             {
