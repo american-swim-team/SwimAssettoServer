@@ -79,7 +79,6 @@ public class TimeTrialPlugin : BackgroundService
         // Register collision handler using lambda to ensure proper binding
         client.Collision += (sender, args) =>
         {
-            Log.Debug("TimeTrialPlugin: Collision lambda fired for {Name}", sender.Name);
             if (_instances.TryGetValue(sender.SessionId, out var inst))
             {
                 inst.OnCollision();

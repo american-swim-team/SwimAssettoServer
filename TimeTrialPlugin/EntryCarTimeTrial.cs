@@ -73,9 +73,6 @@ public class EntryCarTimeTrial
 
     public void OnCollision()
     {
-        Log.Debug("EntryCarTimeTrial.OnCollision: InvalidateOnCollision={Enabled}, CurrentTrack={Track}, LapValid={Valid}",
-            _configuration.InvalidateOnCollision, _currentTrack?.Name ?? "null", _lapValid);
-
         if (_configuration.InvalidateOnCollision && _currentTrack != null && _lapValid)
         {
             InvalidateLap("Collision detected");
