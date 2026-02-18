@@ -91,9 +91,10 @@ public class SwimCrashHandler : BackgroundService
         state.CollisionsDisabledTime = _sessionManager.ServerTimeMilliseconds;
         state.LastCollisionWhileWaiting = _sessionManager.ServerTimeMilliseconds;
 
-        _entryCarManager.BroadcastPacket(new ResetCarPacket
+        _entryCarManager.BroadcastPacket(new CollisionStatePacket
         {
-            Target = entryCar.Client!.SessionId
+            Target = entryCar.Client!.SessionId,
+            Enabled = 0
         });
         _trafficAi?.GetAiCarBySessionId(entryCar.SessionId).TryTeleportToSpline();
         Log.Information("Reset {client} due to spinning", entryCar.Client.Name);
@@ -182,6 +183,11 @@ public class SwimCrashHandler : BackgroundService
             {
                 e.SetCollisions(true);
                 state.WaitingForReEnable = false;
+                _entryCarManager.BroadcastPacket(new CollisionStatePacket
+                {
+                    Target = e.Client.SessionId,
+                    Enabled = 1
+                });
                 Log.Information("Force re-enabled collisions for {client} (max time exceeded)", e.Client.Name);
                 return;
             }
@@ -191,6 +197,11 @@ public class SwimCrashHandler : BackgroundService
             {
                 e.SetCollisions(true);
                 state.WaitingForReEnable = false;
+                _entryCarManager.BroadcastPacket(new CollisionStatePacket
+                {
+                    Target = e.Client.SessionId,
+                    Enabled = 1
+                });
                 Log.Information("Re-enabled collisions for {client} (cruising speed reached)", e.Client.Name);
             }
 
@@ -209,6 +220,11 @@ public class SwimCrashHandler : BackgroundService
                     e.SetCollisions(true);
                     state.StoppedCollisionsDisabled = false;
                     state.StoppedSince = 0;
+                    _entryCarManager.BroadcastPacket(new CollisionStatePacket
+                    {
+                        Target = e.Client.SessionId,
+                        Enabled = 1
+                    });
                     Log.Information("Re-enabled collisions for {client} (no longer stopped)", e.Client.Name);
                 }
                 return;
@@ -224,6 +240,11 @@ public class SwimCrashHandler : BackgroundService
                 {
                     e.SetCollisions(false);
                     state.StoppedCollisionsDisabled = true;
+                    _entryCarManager.BroadcastPacket(new CollisionStatePacket
+                    {
+                        Target = e.Client.SessionId,
+                        Enabled = 0
+                    });
                     Log.Information("Disabled collisions for {client} (stopped on road)", e.Client.Name);
                     return;
                 }

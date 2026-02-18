@@ -41,38 +41,42 @@ distributed or used.
 ]]
 --
 
-local sim = ac.getSim()
 local uiState = ac.getUI()
-local resetEvents = 0
-local iconDisplayTimer = nil
+local highlightColor = rgb(1.0, 0.5, 0.0)
 
 -- get players server slot
 local slot = ac.getCar(0).sessionID
 ac.debug("Server slot:", slot)
 
-local resetEvent = ac.OnlineEvent({
-    ac.StructItem.key("SW_ResetCar"),
+-- track which session IDs have collisions disabled
+local collisionDisabledCars = {}
+
+ac.OnlineEvent({
+    ac.StructItem.key("SW_CollisionState"),
     target = ac.StructItem.byte(),
+    enabled = ac.StructItem.byte(),
 }, function(sender, message)
-    resetEvents = resetEvents + 1
-    ac.debug("Resets", resetEvents)
-    if slot == message.target then
-        iconDisplayTimer = 0
+    if message.enabled == 0 then
+        collisionDisabledCars[message.target] = true
+    else
+        collisionDisabledCars[message.target] = nil
     end
+    ac.debug("Collision disabled cars", table.nkeys(collisionDisabledCars))
 end)
 
 function script.update(dt)
-    if iconDisplayTimer then
-        iconDisplayTimer = iconDisplayTimer + dt
-        if iconDisplayTimer > 10 then
-            iconDisplayTimer = nil
+    local sim = ac.getSim()
+    for i = 0, sim.carsCount - 1 do
+        local car = ac.getCar(i)
+        if i ~= 0 and collisionDisabledCars[car.sessionID] then
+            ac.highlightCar(i, highlightColor)
         end
     end
 end
 
 function script.drawUI()
     ui.transparentWindow("swimCrash", vec2(uiState.windowSize.x / 2 - 83, 80), vec2(166, 159), function()
-        if iconDisplayTimer then
+        if collisionDisabledCars[slot] then
             ui.drawImage("http://static.swimserver.com/car-crash-icon.png", vec2(0, 0), vec2(166, 159))
         end
     end)
