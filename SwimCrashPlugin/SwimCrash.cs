@@ -130,12 +130,15 @@ public class SwimCrashHandler : BackgroundService
 
         // Check rotation history retroactively - the spin likely already happened
         // before this collision event was reported (up to 5s delay)
-        var (accX, accY) = ComputeAccumulatedRotation(state, HistoryWindowMs);
-
-        if (accX > config.SpinThreshold || accY > config.FlipThreshold)
+        if (config.RetroactiveCheck)
         {
-            TriggerCrashReset(targetEntryCar, state);
-            return;
+            var (accX, accY) = ComputeAccumulatedRotation(state, HistoryWindowMs);
+
+            if (accX > config.SpinThreshold || accY > config.FlipThreshold)
+            {
+                TriggerCrashReset(targetEntryCar, state);
+                return;
+            }
         }
 
         // Spin hasn't happened yet (or was too small) - monitor going forward

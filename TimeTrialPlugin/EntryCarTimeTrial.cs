@@ -92,6 +92,7 @@ public class EntryCarTimeTrial
     private void OnPositionUpdateReceived(EntryCar sender, in PositionUpdateIn positionUpdate)
     {
         var currentPosition = positionUpdate.Position;
+        var velocity = positionUpdate.Velocity;
         var currentTime = _sessionManager.ServerTimeMilliseconds;
 
         // Teleport detection
@@ -107,19 +108,19 @@ public class EntryCarTimeTrial
         // Process checkpoint detection
         if (_hasLastPosition)
         {
-            ProcessPosition(_lastPosition, currentPosition, currentTime);
+            ProcessPosition(_lastPosition, currentPosition, velocity, currentTime);
         }
 
         _lastPosition = currentPosition;
         _hasLastPosition = true;
     }
 
-    private void ProcessPosition(Vector3 previousPosition, Vector3 currentPosition, long currentTime)
+    private void ProcessPosition(Vector3 previousPosition, Vector3 currentPosition, Vector3 velocity, long currentTime)
     {
         // If no lap in progress, check for start crossing on any track
         if (_currentTrack == null)
         {
-            var (track, checkpoint) = _checkpointDetector.DetectStartCrossing(previousPosition, currentPosition);
+            var (track, checkpoint) = _checkpointDetector.DetectStartCrossing(previousPosition, currentPosition, velocity);
             if (track != null && checkpoint != null)
             {
                 StartLap(track, currentTime);
@@ -200,8 +201,15 @@ public class EntryCarTimeTrial
             PersonalBestMs = (int)(pb?.TotalTimeMs ?? 0)
         });
 
+        var vel = _entryCar.Status.Velocity;
+        var dirLength = MathF.Sqrt(vel.X * vel.X + vel.Z * vel.Z);
         Log.Information("Player {Name} started lap on {Track} (checkpoints: {Count})",
             _entryCar.Client?.Name, track.Name, track.TotalCheckpoints);
+        if (dirLength > 0.001f)
+        {
+            Log.Information("Travel direction: [{X:F2}, 0, {Z:F2}] (raw velocity: [{VX:F1}, {VY:F1}, {VZ:F1}])",
+                vel.X / dirLength, vel.Z / dirLength, vel.X, vel.Y, vel.Z);
+        }
     }
 
     private void HandleSectorCheckpoint(CheckpointDefinition checkpoint, long currentTime)

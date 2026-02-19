@@ -41,6 +41,10 @@ Tracks:
         Type: StartFinish
         Position: [1234.5, 10.0, 5678.9]
         Radius: 15.0
+        # Optional: expected travel direction [X, Y, Z] to filter out opposing-lane false starts
+        # Direction: [1.0, 0.0, 0.0]
+        # Optional: max angle in degrees between player velocity and direction (default 90)
+        # DirectionToleranceDegrees: 90
       # Sector 1 checkpoint
       - Index: 1
         Type: Sector

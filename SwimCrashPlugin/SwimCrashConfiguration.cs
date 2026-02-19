@@ -16,4 +16,5 @@ public class SwimCrashConfiguration : IValidateConfiguration<SwimCrashConfigurat
     public int? MaxNoCollisionTimeMs { get; init; }
     public float? StoppedSpeedThreshold { get; init; }
     public int? StoppedTimeBeforeDisableMs { get; init; }
+    public bool RetroactiveCheck { get; init; } = true;
 }

@@ -66,10 +66,13 @@ public class CheckpointDetector
     /// <summary>
     /// Find the start/finish or start checkpoint for any track at the given position.
     /// Used to automatically select which track the player is starting on.
+    /// When a checkpoint has a Direction configured, the player's velocity must
+    /// align within the tolerance angle to trigger a start.
     /// </summary>
     public (TrackDefinition? Track, CheckpointDefinition? Checkpoint) DetectStartCrossing(
         Vector3 previousPosition,
-        Vector3 currentPosition)
+        Vector3 currentPosition,
+        Vector3 velocity)
     {
         foreach (var track in _configuration.Tracks)
         {
@@ -81,9 +84,38 @@ public class CheckpointDetector
 
             if (!wasInside && isInside)
             {
+                if (!IsDirectionAligned(velocity, startCheckpoint))
+                    continue;
+
                 return (track, startCheckpoint);
             }
         }
         return (null, null);
+    }
+
+    /// <summary>
+    /// Check if velocity aligns with the checkpoint's expected direction.
+    /// Uses only the XZ (horizontal) plane to ignore vertical movement.
+    /// Returns true if no direction is configured (backwards compatible).
+    /// </summary>
+    private static bool IsDirectionAligned(Vector3 velocity, CheckpointDefinition checkpoint)
+    {
+        var direction = checkpoint.DirectionVector;
+        if (direction == null) return true;
+
+        // Project both vectors onto XZ plane
+        var velXZ = new Vector2(velocity.X, velocity.Z);
+        var dirXZ = new Vector2(direction.Value.X, direction.Value.Z);
+
+        var velLength = velXZ.Length();
+        var dirLength = dirXZ.Length();
+
+        // If either vector has near-zero XZ magnitude, skip direction check
+        if (velLength < 0.001f || dirLength < 0.001f) return true;
+
+        var dot = Vector2.Dot(velXZ / velLength, dirXZ / dirLength);
+        var cosThreshold = MathF.Cos(checkpoint.DirectionToleranceDegrees * MathF.PI / 180f);
+
+        return dot >= cosThreshold;
     }
 }

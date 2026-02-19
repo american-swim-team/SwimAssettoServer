@@ -30,6 +30,13 @@ public class TimeTrialConfigurationValidator : AbstractValidator<TimeTrialConfig
                     .Must(p => p.Count == 3)
                     .WithMessage("Position must have exactly 3 values [X, Y, Z]");
                 checkpoint.RuleFor(c => c.Radius).GreaterThan(0);
+                checkpoint.RuleFor(c => c.Direction)
+                    .Must(d => d!.Count == 3)
+                    .When(c => c.Direction != null)
+                    .WithMessage("Direction must have exactly 3 values [X, Y, Z]");
+                checkpoint.RuleFor(c => c.DirectionToleranceDegrees)
+                    .GreaterThan(0).LessThanOrEqualTo(180)
+                    .WithMessage("DirectionToleranceDegrees must be between 0 (exclusive) and 180 (inclusive)");
             });
         });
     }
