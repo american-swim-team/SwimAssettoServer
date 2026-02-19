@@ -1243,13 +1243,15 @@ public class AiState : IAiState, IDisposable
         _laneChange.Begin(
             CurrentSplinePointId,
             endPointId,
+            targetPointId,
             startPosition,
             endPosition,
             startTangent,
             endTangent,
             startCamber,
             endCamber,
-            isOvertake);
+            isOvertake,
+            points);
 
         Log.Verbose("AI {SessionId} starting lane change from point {SourcePoint} to {TargetPoint}, overtake={IsOvertake}",
             EntryCarAi.EntryCar.SessionId, CurrentSplinePointId, endPointId, isOvertake);
@@ -1334,10 +1336,10 @@ public class AiState : IAiState, IDisposable
         }
 
         // Capture current interpolated position/tangent for smooth return
-        // Use linear Y to match the car's actual visual height (not CatmullRom Y)
+        // Use blended Y to match the car's actual visual height (not CatmullRom Y)
         Vector3 currentPosition = _laneChange.GetInterpolatedPosition();
-        float abortLinearY = _laneChange.StartY + (_laneChange.EndY - _laneChange.StartY) * _laneChange.Progress;
-        currentPosition = currentPosition with { Y = abortLinearY };
+        float currentBlendedY = _laneChange.GetBlendedHeight();
+        currentPosition = currentPosition with { Y = currentBlendedY };
         Vector3 currentTangent = _laneChange.GetInterpolatedTangent();
 
         // Find a return point on the source lane ahead of us
@@ -1382,7 +1384,9 @@ public class AiState : IAiState, IDisposable
             returnPosition,
             returnTangent,
             returnPointId,
-            returnCamber);
+            returnCamber,
+            sourcePointId,
+            _spline.Points);
 
         Log.Verbose("AI {SessionId} smoothly aborting lane change, returning to source lane", EntryCarAi.EntryCar.SessionId);
     }
@@ -1492,11 +1496,11 @@ public class AiState : IAiState, IDisposable
             _laneChange.UpdateProgress(moveMeters);
 
             var laneChangePoint = _laneChange.GetInterpolatedPoint();
-            // Override Y with linear interpolation to prevent floating on inclines/declines
-            float linearY = _laneChange.StartY + (_laneChange.EndY - _laneChange.StartY) * _laneChange.Progress;
-            smoothPosition = new Vector3(laneChangePoint.Position.X, linearY, laneChangePoint.Position.Z);
+            // Use terrain-following blended height from both lane profiles
+            float blendedY = _laneChange.GetBlendedHeight();
+            smoothPosition = new Vector3(laneChangePoint.Position.X, blendedY, laneChangePoint.Position.Z);
             smoothTangent = laneChangePoint.Tangent;
-            camber = _laneChange.GetInterpolatedCamber();
+            camber = _laneChange.GetBlendedCamber();
 
             // Check if lane change is complete
             if (_laneChange.IsComplete)
@@ -1540,10 +1544,10 @@ public class AiState : IAiState, IDisposable
         float pitch;
         if (_laneChange.IsChangingLane)
         {
-            // During lane change, derive pitch from start/end height difference
-            float lcHeightDiff = _laneChange.EndY - _laneChange.StartY;
+            // During lane change, derive pitch from blended slope of both lane profiles
+            float blendedSlope = _laneChange.GetBlendedPitchSlope();
             float lcHorizLength = new Vector2(smoothTangent.X, smoothTangent.Z).Length();
-            pitch = MathF.Atan2(lcHeightDiff / _laneChange.TotalDistance * lcHorizLength, lcHorizLength);
+            pitch = MathF.Atan2(blendedSlope * lcHorizLength, lcHorizLength);
         }
         else if (_junctionEvaluator.TryNext(CurrentSplinePointId, out var pitchNextPoint))
         {

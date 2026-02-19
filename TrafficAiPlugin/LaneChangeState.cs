@@ -1,5 +1,6 @@
 using System.Numerics;
 using JPBotelho;
+using TrafficAiPlugin.Shared.Splines;
 
 namespace TrafficAiPlugin;
 
@@ -11,8 +12,6 @@ public class LaneChangeState
     public int SourcePointId { get; private set; } = -1;
     public int TargetPointId { get; private set; } = -1;
     public bool IsOvertake { get; private set; }
-    public float StartY => _startPosition.Y;
-    public float EndY => _endPosition.Y;
     public float TotalDistance => _totalDistance;
 
     private Vector3 _startPosition;
@@ -24,16 +23,31 @@ public class LaneChangeState
     private float _startCamber;
     private float _endCamber;
 
+    // Height/camber profile arrays for terrain-following during lane changes
+    private const int MaxProfilePoints = 64;
+
+    private readonly float[] _sourceProfileDist = new float[MaxProfilePoints];
+    private readonly float[] _sourceProfileY = new float[MaxProfilePoints];
+    private readonly float[] _sourceProfileCamber = new float[MaxProfilePoints];
+    private int _sourceProfileCount;
+
+    private readonly float[] _targetProfileDist = new float[MaxProfilePoints];
+    private readonly float[] _targetProfileY = new float[MaxProfilePoints];
+    private readonly float[] _targetProfileCamber = new float[MaxProfilePoints];
+    private int _targetProfileCount;
+
     public void Begin(
         int sourcePointId,
         int targetPointId,
+        int targetStartPointId,
         Vector3 startPosition,
         Vector3 endPosition,
         Vector3 startTangent,
         Vector3 endTangent,
         float startCamber,
         float endCamber,
-        bool isOvertake)
+        bool isOvertake,
+        ReadOnlySpan<SplinePoint> points)
     {
         IsChangingLane = true;
         Progress = 0;
@@ -49,6 +63,13 @@ public class LaneChangeState
         _distanceTravelled = 0;
 
         _totalDistance = EstimateCurveLength(startPosition, endPosition, startTangent, endTangent);
+
+        // Build height+camber profiles from both lanes' spline points
+        float profileDistance = _totalDistance * 1.1f;
+        _sourceProfileCount = BuildProfile(points, sourcePointId, profileDistance,
+            _sourceProfileDist, _sourceProfileY, _sourceProfileCamber);
+        _targetProfileCount = BuildProfile(points, targetStartPointId, profileDistance,
+            _targetProfileDist, _targetProfileY, _targetProfileCamber);
     }
 
     public void BeginAbortReturn(
@@ -57,7 +78,9 @@ public class LaneChangeState
         Vector3 returnPosition,
         Vector3 returnTangent,
         int returnPointId,
-        float returnCamber)
+        float returnCamber,
+        int sourceWalkStartId,
+        ReadOnlySpan<SplinePoint> points)
     {
         // Capture current camber before resetting progress
         float currentCamber = GetInterpolatedCamber();
@@ -80,6 +103,11 @@ public class LaneChangeState
         TargetPointId = returnPointId;
 
         _totalDistance = EstimateCurveLength(_startPosition, _endPosition, _startTangent, _endTangent);
+
+        // Build source lane profile for abort return height tracking
+        _sourceProfileCount = BuildProfile(points, sourceWalkStartId,
+            _totalDistance * 1.1f, _sourceProfileDist, _sourceProfileY, _sourceProfileCamber);
+        _targetProfileCount = 0;
     }
 
     public void UpdateProgress(float distanceMoved)
@@ -131,6 +159,136 @@ public class LaneChangeState
         SourcePointId = -1;
         TargetPointId = -1;
         _distanceTravelled = 0;
+    }
+
+    public float GetBlendedHeight()
+    {
+        if (!IsChangingLane) return 0;
+
+        if (IsAborting)
+        {
+            float totalDist = _sourceProfileCount > 0
+                ? _sourceProfileDist[_sourceProfileCount - 1] : 0;
+            float mappedDist = Progress * totalDist;
+            float sourceY = LookupHeight(
+                _sourceProfileDist, _sourceProfileY, _sourceProfileCount, mappedDist);
+            return _startPosition.Y * (1 - Progress) + sourceY * Progress;
+        }
+
+        float srcY = LookupHeight(
+            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, _distanceTravelled);
+        float tgtY = LookupHeight(
+            _targetProfileDist, _targetProfileY, _targetProfileCount, _distanceTravelled);
+        return srcY * (1 - Progress) + tgtY * Progress;
+    }
+
+    public float GetBlendedPitchSlope()
+    {
+        if (!IsChangingLane) return 0;
+
+        if (IsAborting)
+        {
+            float totalDist = _sourceProfileCount > 0
+                ? _sourceProfileDist[_sourceProfileCount - 1] : 0;
+            float mappedDist = Progress * totalDist;
+            return LookupSlope(
+                _sourceProfileDist, _sourceProfileY, _sourceProfileCount, mappedDist);
+        }
+
+        float srcSlope = LookupSlope(
+            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, _distanceTravelled);
+        float tgtSlope = LookupSlope(
+            _targetProfileDist, _targetProfileY, _targetProfileCount, _distanceTravelled);
+        return srcSlope * (1 - Progress) + tgtSlope * Progress;
+    }
+
+    public float GetBlendedCamber()
+    {
+        if (!IsChangingLane) return 0;
+
+        if (IsAborting)
+        {
+            float totalDist = _sourceProfileCount > 0
+                ? _sourceProfileDist[_sourceProfileCount - 1] : 0;
+            float mappedDist = Progress * totalDist;
+            float sourceCamber = LookupHeight(
+                _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, mappedDist);
+            return _startCamber * (1 - Progress) + sourceCamber * Progress;
+        }
+
+        float srcCamber = LookupHeight(
+            _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, _distanceTravelled);
+        float tgtCamber = LookupHeight(
+            _targetProfileDist, _targetProfileCamber, _targetProfileCount, _distanceTravelled);
+        return srcCamber * (1 - Progress) + tgtCamber * Progress;
+    }
+
+    private static int BuildProfile(
+        ReadOnlySpan<SplinePoint> points,
+        int startPointId,
+        float maxDistance,
+        float[] outDist,
+        float[] outY,
+        float[] outCamber)
+    {
+        if (startPointId < 0 || startPointId >= points.Length)
+            return 0;
+
+        int count = 0;
+        float cumDist = 0;
+        int currentId = startPointId;
+
+        outDist[0] = 0;
+        outY[0] = points[currentId].Position.Y;
+        outCamber[0] = points[currentId].Camber;
+        count = 1;
+
+        while (cumDist < maxDistance && currentId >= 0 && count < MaxProfilePoints)
+        {
+            float segLen = points[currentId].Length;
+            int nextId = points[currentId].NextId;
+            if (nextId < 0) break;
+
+            cumDist += segLen;
+            outDist[count] = cumDist;
+            outY[count] = points[nextId].Position.Y;
+            outCamber[count] = points[nextId].Camber;
+            count++;
+
+            currentId = nextId;
+        }
+
+        return count;
+    }
+
+    private static float LookupHeight(float[] dist, float[] y, int count, float distance)
+    {
+        if (count == 0) return 0;
+        if (count == 1 || distance <= dist[0]) return y[0];
+        if (distance >= dist[count - 1]) return y[count - 1];
+
+        for (int i = 1; i < count; i++)
+        {
+            if (distance <= dist[i])
+            {
+                float t = (distance - dist[i - 1]) / (dist[i] - dist[i - 1]);
+                return y[i - 1] + (y[i] - y[i - 1]) * t;
+            }
+        }
+        return y[count - 1];
+    }
+
+    private static float LookupSlope(float[] dist, float[] y, int count, float distance)
+    {
+        if (count < 2) return 0;
+
+        int idx = (distance <= dist[0]) ? 1 : count - 1;
+        for (int i = 1; i < count; i++)
+        {
+            if (distance <= dist[i]) { idx = i; break; }
+        }
+        float dd = dist[idx] - dist[idx - 1];
+        return dd > 0 ? (y[idx] - y[idx - 1]) / dd : 0;
     }
 
     private static float EstimateCurveLength(Vector3 start, Vector3 end, Vector3 tanStart, Vector3 tanEnd, int samples = 10)
