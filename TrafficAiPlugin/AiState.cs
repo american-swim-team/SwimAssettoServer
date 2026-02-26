@@ -1227,8 +1227,9 @@ public class AiState : IAiState, IDisposable
                 CurrentSplinePointId, targetPointId, laneChangeDistance))
             return false;
 
-        // Get camber values for interpolation
-        float startCamber = _spline.Operations.GetCamber(CurrentSplinePointId);
+        // Get camber values for interpolation (use interpolated camber at car's actual position)
+        float startCamber = _spline.Operations.GetCamber(CurrentSplinePointId,
+            _currentVecLength > 0 ? _currentVecProgress / _currentVecLength : 0);
         float endCamber = _spline.Operations.GetCamber(endPointId);
 
         // Set indicator

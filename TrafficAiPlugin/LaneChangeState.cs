@@ -23,6 +23,12 @@ public class LaneChangeState
     private float _startCamber;
     private float _endCamber;
 
+    // Height/camber offset at lane change start: difference between the car's actual
+    // interpolated position and the source spline point position. Fades out over Progress
+    // to ensure seamless continuity at both the start and end of the lane change.
+    private float _startHeightOffset;
+    private float _startCamberOffset;
+
     // XZ arc-length lookup table for Catmull-Rom reparameterization
     private const int ArcLengthSamples = 16;
     private readonly float[] _arcLengthTable = new float[ArcLengthSamples + 1];
@@ -83,6 +89,15 @@ public class LaneChangeState
             _sourceProfileDist, _sourceProfileY, _sourceProfileCamber);
         _targetProfileCount = BuildProfile(points, targetStartPointId, profileDistance,
             _targetProfileDist, _targetProfileY, _targetProfileCamber);
+
+        // The car's actual Y (_startPosition.Y) is interpolated between spline points,
+        // but the source profile starts at sourcePointId's exact Y. Compute the offset
+        // so we can fade it out over Progress for seamless height continuity.
+        float profileStartY = _sourceProfileCount > 0 ? _sourceProfileY[0] : _startPosition.Y;
+        _startHeightOffset = _startPosition.Y - profileStartY;
+
+        float profileStartCamber = _sourceProfileCount > 0 ? _sourceProfileCamber[0] : _startCamber;
+        _startCamberOffset = _startCamber - profileStartCamber;
     }
 
     public void BeginAbortReturn(
@@ -191,13 +206,14 @@ public class LaneChangeState
             return _startPosition.Y * (1 - Progress) + sourceY * Progress;
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcY = LookupHeight(
             _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtY = LookupHeight(
             _targetProfileDist, _targetProfileY, _targetProfileCount, tgtDist);
-        return srcY * (1 - Progress) + tgtY * Progress;
+        float profileBlend = srcY * (1 - Progress) + tgtY * Progress;
+        return profileBlend + _startHeightOffset * (1 - Progress);
     }
 
     public float GetBlendedPitchSlope()
@@ -213,8 +229,8 @@ public class LaneChangeState
                 _sourceProfileDist, _sourceProfileY, _sourceProfileCount, mappedDist);
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcSlope = LookupSlope(
             _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtSlope = LookupSlope(
@@ -236,13 +252,14 @@ public class LaneChangeState
             return _startCamber * (1 - Progress) + sourceCamber * Progress;
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcCamber = LookupHeight(
             _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, srcDist);
         float tgtCamber = LookupHeight(
             _targetProfileDist, _targetProfileCamber, _targetProfileCount, tgtDist);
-        return srcCamber * (1 - Progress) + tgtCamber * Progress;
+        float profileBlend = srcCamber * (1 - Progress) + tgtCamber * Progress;
+        return profileBlend + _startCamberOffset * (1 - Progress);
     }
 
     private void BuildArcLengthTable()
