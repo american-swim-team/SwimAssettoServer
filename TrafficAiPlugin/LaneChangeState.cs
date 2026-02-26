@@ -23,6 +23,15 @@ public class LaneChangeState
     private float _startCamber;
     private float _endCamber;
 
+    // XZ arc-length lookup table for Catmull-Rom reparameterization
+    private const int ArcLengthSamples = 16;
+    private readonly float[] _arcLengthTable = new float[ArcLengthSamples + 1];
+    private float _xzArcLength;
+
+    // Profile distance scaling: maps curve distance to lane spline distance
+    private float _sourceLaneDistToEnd;
+    private float _targetLaneDistToEnd;
+
     // Height/camber profile arrays for terrain-following during lane changes
     private const int MaxProfilePoints = 64;
 
@@ -62,10 +71,14 @@ public class LaneChangeState
         IsOvertake = isOvertake;
         _distanceTravelled = 0;
 
-        _totalDistance = EstimateCurveLength(startPosition, endPosition, startTangent, endTangent);
+        BuildArcLengthTable();
+        _totalDistance = _xzArcLength;
+
+        _sourceLaneDistToEnd = _totalDistance;
+        _targetLaneDistToEnd = ComputeSplineChainDistance(points, targetStartPointId, targetPointId, _totalDistance * 2);
 
         // Build height+camber profiles from both lanes' spline points
-        float profileDistance = _totalDistance * 1.1f;
+        float profileDistance = Math.Max(_totalDistance, _targetLaneDistToEnd) * 1.1f;
         _sourceProfileCount = BuildProfile(points, sourcePointId, profileDistance,
             _sourceProfileDist, _sourceProfileY, _sourceProfileCamber);
         _targetProfileCount = BuildProfile(points, targetStartPointId, profileDistance,
@@ -102,7 +115,10 @@ public class LaneChangeState
         // SourcePointId stays as-is (the original source lane we're returning to)
         TargetPointId = returnPointId;
 
-        _totalDistance = EstimateCurveLength(_startPosition, _endPosition, _startTangent, _endTangent);
+        BuildArcLengthTable();
+        _totalDistance = _xzArcLength;
+
+        _sourceLaneDistToEnd = ComputeSplineChainDistance(points, sourceWalkStartId, returnPointId, _totalDistance * 2);
 
         // Build source lane profile for abort return height tracking
         _sourceProfileCount = BuildProfile(points, sourceWalkStartId,
@@ -121,17 +137,17 @@ public class LaneChangeState
 
     public CatmullRom.CatmullRomPoint GetInterpolatedPoint()
     {
-        return CatmullRom.Evaluate(_startPosition, _endPosition, _startTangent, _endTangent, Progress);
+        return CatmullRom.Evaluate(_startPosition, _endPosition, _startTangent, _endTangent, ProgressToT(Progress));
     }
 
     public Vector3 GetInterpolatedPosition()
     {
-        return CatmullRom.CalculatePosition(_startPosition, _endPosition, _startTangent, _endTangent, Progress);
+        return CatmullRom.CalculatePosition(_startPosition, _endPosition, _startTangent, _endTangent, ProgressToT(Progress));
     }
 
     public Vector3 GetInterpolatedTangent()
     {
-        return CatmullRom.CalculateTangent(_startPosition, _endPosition, _startTangent, _endTangent, Progress);
+        return CatmullRom.CalculateTangent(_startPosition, _endPosition, _startTangent, _endTangent, ProgressToT(Progress));
     }
 
     public float GetInterpolatedCamber()
@@ -175,10 +191,12 @@ public class LaneChangeState
             return _startPosition.Y * (1 - Progress) + sourceY * Progress;
         }
 
+        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
+        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
         float srcY = LookupHeight(
-            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, _distanceTravelled);
+            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtY = LookupHeight(
-            _targetProfileDist, _targetProfileY, _targetProfileCount, _distanceTravelled);
+            _targetProfileDist, _targetProfileY, _targetProfileCount, tgtDist);
         return srcY * (1 - Progress) + tgtY * Progress;
     }
 
@@ -195,10 +213,12 @@ public class LaneChangeState
                 _sourceProfileDist, _sourceProfileY, _sourceProfileCount, mappedDist);
         }
 
+        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
+        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
         float srcSlope = LookupSlope(
-            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, _distanceTravelled);
+            _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtSlope = LookupSlope(
-            _targetProfileDist, _targetProfileY, _targetProfileCount, _distanceTravelled);
+            _targetProfileDist, _targetProfileY, _targetProfileCount, tgtDist);
         return srcSlope * (1 - Progress) + tgtSlope * Progress;
     }
 
@@ -216,11 +236,77 @@ public class LaneChangeState
             return _startCamber * (1 - Progress) + sourceCamber * Progress;
         }
 
+        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
+        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
         float srcCamber = LookupHeight(
-            _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, _distanceTravelled);
+            _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, srcDist);
         float tgtCamber = LookupHeight(
-            _targetProfileDist, _targetProfileCamber, _targetProfileCount, _distanceTravelled);
+            _targetProfileDist, _targetProfileCamber, _targetProfileCount, tgtDist);
         return srcCamber * (1 - Progress) + tgtCamber * Progress;
+    }
+
+    private void BuildArcLengthTable()
+    {
+        _arcLengthTable[0] = 0;
+        Vector3 prev = _startPosition;
+
+        for (int i = 1; i <= ArcLengthSamples; i++)
+        {
+            float t = i / (float)ArcLengthSamples;
+            Vector3 pos = CatmullRom.CalculatePosition(_startPosition, _endPosition, _startTangent, _endTangent, t);
+            float dx = pos.X - prev.X;
+            float dz = pos.Z - prev.Z;
+            _arcLengthTable[i] = _arcLengthTable[i - 1] + MathF.Sqrt(dx * dx + dz * dz);
+            prev = pos;
+        }
+
+        _xzArcLength = _arcLengthTable[ArcLengthSamples];
+    }
+
+    private float ProgressToT(float progress)
+    {
+        if (progress <= 0) return 0;
+        if (progress >= 1) return 1;
+
+        float targetLength = progress * _xzArcLength;
+
+        // Binary search for the interval containing targetLength
+        int lo = 0, hi = ArcLengthSamples;
+        while (hi - lo > 1)
+        {
+            int mid = (lo + hi) / 2;
+            if (_arcLengthTable[mid] <= targetLength)
+                lo = mid;
+            else
+                hi = mid;
+        }
+
+        float segLength = _arcLengthTable[hi] - _arcLengthTable[lo];
+        float segFraction = segLength > 0 ? (targetLength - _arcLengthTable[lo]) / segLength : 0;
+
+        return (lo + segFraction) / ArcLengthSamples;
+    }
+
+    private static float ComputeSplineChainDistance(ReadOnlySpan<SplinePoint> points, int startId, int endId, float maxDist)
+    {
+        if (startId < 0 || startId >= points.Length || startId == endId)
+            return 0;
+
+        float cumDist = 0;
+        int currentId = startId;
+
+        while (currentId >= 0 && currentId < points.Length && cumDist < maxDist)
+        {
+            int nextId = points[currentId].NextId;
+            if (nextId < 0) break;
+
+            cumDist += points[currentId].Length;
+            if (nextId == endId) return cumDist;
+
+            currentId = nextId;
+        }
+
+        return cumDist;
     }
 
     private static int BuildProfile(
@@ -289,21 +375,5 @@ public class LaneChangeState
         }
         float dd = dist[idx] - dist[idx - 1];
         return dd > 0 ? (y[idx] - y[idx - 1]) / dd : 0;
-    }
-
-    private static float EstimateCurveLength(Vector3 start, Vector3 end, Vector3 tanStart, Vector3 tanEnd, int samples = 10)
-    {
-        float length = 0;
-        Vector3 previousPoint = start;
-
-        for (int i = 1; i <= samples; i++)
-        {
-            float t = i / (float)samples;
-            Vector3 currentPoint = CatmullRom.CalculatePosition(start, end, tanStart, tanEnd, t);
-            length += Vector3.Distance(previousPoint, currentPoint);
-            previousPoint = currentPoint;
-        }
-
-        return length;
     }
 }
