@@ -191,8 +191,8 @@ public class LaneChangeState
             return _startPosition.Y * (1 - Progress) + sourceY * Progress;
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcY = LookupHeight(
             _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtY = LookupHeight(
@@ -213,8 +213,8 @@ public class LaneChangeState
                 _sourceProfileDist, _sourceProfileY, _sourceProfileCount, mappedDist);
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcSlope = LookupSlope(
             _sourceProfileDist, _sourceProfileY, _sourceProfileCount, srcDist);
         float tgtSlope = LookupSlope(
@@ -236,8 +236,8 @@ public class LaneChangeState
             return _startCamber * (1 - Progress) + sourceCamber * Progress;
         }
 
-        float srcDist = _totalDistance > 0 ? _distanceTravelled * (_sourceLaneDistToEnd / _totalDistance) : 0;
-        float tgtDist = _totalDistance > 0 ? _distanceTravelled * (_targetLaneDistToEnd / _totalDistance) : 0;
+        float srcDist = Progress * _sourceLaneDistToEnd;
+        float tgtDist = Progress * _targetLaneDistToEnd;
         float srcCamber = LookupHeight(
             _sourceProfileDist, _sourceProfileCamber, _sourceProfileCount, srcDist);
         float tgtCamber = LookupHeight(
