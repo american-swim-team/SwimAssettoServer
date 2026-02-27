@@ -71,7 +71,7 @@ public class SwimChatService : BackgroundService
 
             var packet = new ChatRoleColorPacket
             {
-                CarIndex = car.SessionId,
+                TargetSessionId = car.SessionId,
                 Color = color
             };
             _entryCarManager.BroadcastPacket(packet);
@@ -117,7 +117,7 @@ public class SwimChatService : BackgroundService
                 var color = GetColorForSession(car.SessionId);
                 var packet = new ChatRoleColorPacket
                 {
-                    CarIndex = car.SessionId,
+                    TargetSessionId = car.SessionId,
                     Color = color
                 };
                 sender.SendPacket(packet);
@@ -128,7 +128,7 @@ public class SwimChatService : BackgroundService
         var newColor = GetColorForSession(sender.SessionId);
         var broadcastPacket = new ChatRoleColorPacket
         {
-            CarIndex = sender.SessionId,
+            TargetSessionId = sender.SessionId,
             Color = newColor
         };
         _entryCarManager.BroadcastPacket(broadcastPacket);
