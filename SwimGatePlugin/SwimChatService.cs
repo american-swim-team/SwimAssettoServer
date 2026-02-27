@@ -11,7 +11,7 @@ using SwimGatePlugin.Packets;
 
 namespace SwimGatePlugin;
 
-public class SwimChatService : IHostedService
+public class SwimChatService : BackgroundService
 {
     private readonly SwimGateConfiguration _config;
     private readonly SwimApiClient _apiClient;
@@ -49,8 +49,34 @@ public class SwimChatService : IHostedService
         _chatService.MessageReceived += OnChatMessageReceived;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (_sortedRoles.Count == 0)
+            return;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+            BroadcastAllColors();
+        }
+    }
+
+    private void BroadcastAllColors()
+    {
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (car.Client == null) continue;
+            var color = GetColorForSession(car.SessionId);
+            if (color == Color.White) continue;
+
+            var packet = new ChatRoleColorPacket
+            {
+                CarIndex = car.SessionId,
+                Color = color
+            };
+            _entryCarManager.BroadcastPacket(packet);
+        }
+    }
 
     private void OnClientConnected(ACTcpClient sender, EventArgs args)
     {
@@ -68,6 +94,9 @@ public class SwimChatService : IHostedService
         }
 
         _clientRoles[sender.SessionId] = resolved;
+
+        if (resolved != null && !string.IsNullOrEmpty(resolved.Prefix))
+            sender.Name = $"{resolved.Prefix} {sender.Name}";
     }
 
     private void OnDisconnecting(ACTcpClient sender, EventArgs args)
@@ -83,7 +112,7 @@ public class SwimChatService : IHostedService
         // Send all existing clients' colors to the newly ready client
         foreach (var car in _entryCarManager.EntryCars)
         {
-            if (car.Client is { HasSentFirstUpdate: true })
+            if (car.Client != null)
             {
                 var color = GetColorForSession(car.SessionId);
                 var packet = new ChatRoleColorPacket
@@ -103,6 +132,13 @@ public class SwimChatService : IHostedService
             Color = newColor
         };
         _entryCarManager.BroadcastPacket(broadcastPacket);
+
+        // BroadcastPacket skips clients without HasSentFirstUpdate - send directly to those
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (car.Client is { HasSentFirstUpdate: false } client && client != sender)
+                client.SendPacket(broadcastPacket);
+        }
     }
 
     private Color GetColorForSession(byte sessionId)
