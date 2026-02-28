@@ -43,6 +43,18 @@ public readonly struct DriverPersonality
     public float DecelerationFactor { get; init; }
 
     /// <summary>
+    /// Multiplier on reaction time. Range: 0.7-1.3
+    /// Higher values = slower reactions (cautious drivers). Lower = faster reactions (aggressive).
+    /// </summary>
+    public float ReactionTimeFactor { get; init; }
+
+    /// <summary>
+    /// Multiplier on drive-off delay and ramp time. Range: 0.6-1.4
+    /// Higher values = longer delay before driving off from a stop (cautious).
+    /// </summary>
+    public float DriveOffDelayFactor { get; init; }
+
+    /// <summary>
     /// Default personality with neutral traits.
     /// </summary>
     public static DriverPersonality Default => new()
@@ -52,6 +64,8 @@ public readonly struct DriverPersonality
         DesiredSpeedFactor = 1.0f,
         FollowingDistanceFactor = 1.0f,
         AccelerationFactor = 1.0f,
-        DecelerationFactor = 1.0f
+        DecelerationFactor = 1.0f,
+        ReactionTimeFactor = 1.0f,
+        DriveOffDelayFactor = 1.0f
     };
 }

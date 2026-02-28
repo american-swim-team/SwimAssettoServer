@@ -77,6 +77,30 @@ public class AiState : IAiState, IDisposable
     private float _minObstacleDistance;
     private double _randomTwilight;
 
+    // Leader acceleration tracking for CAH model (Change 3/5)
+    private float _leaderAcceleration;
+    private float _lastLeaderSpeed;
+
+    // Jerk limiting (Change 6B)
+    private float _previousAcceleration;
+
+    // Perception delay for cut-ins (Change 4)
+    private float _perceivedObstacleDistance = float.MaxValue;
+    private float _perceivedObstacleSpeed;
+    private long _newObstacleDetectedAt;
+    private bool _obstaclePerceived = true;
+    private float _reactionTimeMs;
+
+    // Estimation noise (Change 5E)
+    private float _gapNoiseState;
+    private float _speedNoiseState;
+
+    // Drive-off delay
+    private bool _waitingToDriveOff;
+    private long _driveOffAt;
+    private float _driveOffRampTime;
+    private float _driveOffElapsed;
+
     // Lane change state
     private readonly LaneChangeState _laneChange = new();
     private long _lastLaneChangeAttempt;
@@ -258,6 +282,22 @@ public class AiState : IAiState, IDisposable
             _laneChange.Abort();
         }
         _minObstacleDistance = Random.Shared.Next(8, 13);
+        _leaderAcceleration = 0;
+        _lastLeaderSpeed = 0;
+        _previousAcceleration = 0;
+        _perceivedObstacleDistance = float.MaxValue;
+        _perceivedObstacleSpeed = 0;
+        _obstaclePerceived = true;
+        _newObstacleDetectedAt = 0;
+        _reactionTimeMs = Random.Shared.NextSingle() *
+            (_configuration.ReactionTimeMaxMs - _configuration.ReactionTimeMinMs)
+            + _configuration.ReactionTimeMinMs;
+        _reactionTimeMs *= _personality.ReactionTimeFactor;
+        _gapNoiseState = 0;
+        _speedNoiseState = 0;
+        _waitingToDriveOff = false;
+        _driveOffAt = 0;
+        _driveOffElapsed = 0;
         SpawnCounter++;
         Initialized = true;
         Update();
@@ -405,19 +445,33 @@ public class AiState : IAiState, IDisposable
         return isAllowedLane;
     }
 
-    private (AiState? ClosestAiState, float ClosestAiStateDistance, float MaxSpeed) SplineLookahead()
+    private struct SplineLookaheadResult
+    {
+        public float MaxCorneringSpeed;
+        public int LeaderCount;
+        public LeaderInfo Leader0, Leader1, Leader2;
+        public AiState? ClosestAiState;
+        public float ClosestAiStateDistance;
+    }
+
+    private SplineLookaheadResult SplineLookahead()
     {
         var points = _spline.Points;
         var junctions = _spline.Junctions;
-        
+        int maxLeaders = _configuration.MultiAnticipationCount;
+
         float maxBrakingDistance = PhysicsUtils.CalculateBrakingDistance(CurrentSpeed, EntryCarAi.AiDeceleration) * 2 + _configuration.LookaheadBufferMeters;
-        AiState? closestAiState = null;
-        float closestAiStateDistance = float.MaxValue;
+        var result = new SplineLookaheadResult
+        {
+            MaxCorneringSpeed = float.MaxValue,
+            ClosestAiStateDistance = float.MaxValue
+        };
+        int foundCount = 0;
+        AiState? previouslyFoundState = null;
         bool junctionFound = false;
         float distanceTravelled = 0;
         var pointId = CurrentSplinePointId;
-        ref readonly var point = ref points[pointId]; 
-        float maxSpeed = float.MaxValue;
+        ref readonly var point = ref points[pointId];
         float currentSpeedSquared = CurrentSpeed * CurrentSpeed;
         while (distanceTravelled < maxBrakingDistance)
         {
@@ -452,16 +506,39 @@ public class AiState : IAiState, IDisposable
                 }
             }
 
-            if (closestAiState == null)
+            // Collect multiple AI leaders
+            if (foundCount < maxLeaders)
             {
                 var slowest = _spline.SlowestAiStates[pointId];
 
-                if (slowest != null)
+                if (slowest != null && slowest != previouslyFoundState)
                 {
-                    closestAiState = slowest;
-                    closestAiStateDistance = MathF.Max(0, Vector3.Distance(Status.Position, closestAiState.Status.Position)
-                                                          - EntryCarAi.VehicleLengthPreMeters
-                                                          - closestAiState.EntryCarAi.VehicleLengthPostMeters);
+                    float gap = MathF.Max(0, Vector3.Distance(Status.Position, slowest.Status.Position)
+                                              - EntryCarAi.VehicleLengthPreMeters
+                                              - slowest.EntryCarAi.VehicleLengthPostMeters);
+                    float speed = Math.Min(slowest.CurrentSpeed, slowest.TargetSpeed);
+                    // Leader acceleration: only track for leader[0], others get 0
+                    float accel = foundCount == 0 ? _leaderAcceleration : 0;
+
+                    var leaderInfo = new LeaderInfo(gap, speed, accel, false);
+
+                    switch (foundCount)
+                    {
+                        case 0:
+                            result.Leader0 = leaderInfo;
+                            result.ClosestAiState = slowest;
+                            result.ClosestAiStateDistance = gap;
+                            break;
+                        case 1:
+                            result.Leader1 = leaderInfo;
+                            break;
+                        case 2:
+                            result.Leader2 = leaderInfo;
+                            break;
+                    }
+
+                    foundCount++;
+                    previouslyFoundState = slowest;
                 }
             }
 
@@ -473,14 +550,17 @@ public class AiState : IAiState, IDisposable
                                             EntryCarAi.AiDeceleration * EntryCarAi.AiCorneringBrakeForceFactor)
                                         * EntryCarAi.AiCorneringBrakeDistanceFactor;
 
-                if (brakingDistance > distanceTravelled)
+                // Comfort factor: start lifting off throttle 50% earlier for smoother cornering
+                const float comfortFactor = 1.5f;
+                if (brakingDistance * comfortFactor > distanceTravelled)
                 {
-                    maxSpeed = Math.Min(maxCorneringSpeed, maxSpeed);
+                    result.MaxCorneringSpeed = Math.Min(maxCorneringSpeed, result.MaxCorneringSpeed);
                 }
             }
         }
 
-        return (closestAiState, closestAiStateDistance, maxSpeed);
+        result.LeaderCount = foundCount;
+        return result;
     }
 
         
@@ -488,7 +568,7 @@ public class AiState : IAiState, IDisposable
     {
         var ignorePlayer = ShouldIgnorePlayerObstacles();
         float boxWidth = _configuration.LaneWidthMeters + 1;
-        float boxLength = _configuration.MaxAiSafetyDistanceMeters + 2;
+        float boxLength = _configuration.EffectiveMaxAiSafetyDistanceMeters + 2;
         float timeHorizon = 3.0f;
         bool isLeft = (indicator & CarStatusFlags.IndicateLeft) != 0;
 
@@ -653,77 +733,245 @@ public class AiState : IAiState, IDisposable
         // Calculate desired speed considering road/cornering limits and personality
         _desiredSpeed = IdmBrain.CalculateDesiredSpeed(
             InitialMaxSpeed,
-            splineLookahead.MaxSpeed,
+            splineLookahead.MaxCorneringSpeed,
             in _personality);
 
-        // Find closest obstacle (player or AI)
-        float obstacleDistance;
-        float obstacleSpeed;
+        // Build leader array for multi-anticipation
+        // If player is closest obstacle, use single-leader mode (can't see through players)
+        bool playerIsClosest = playerObstacle.distance < splineLookahead.ClosestAiStateDistance
+                               && playerObstacle.entryCar != null;
 
-        if (playerObstacle.distance < splineLookahead.ClosestAiStateDistance && playerObstacle.entryCar != null)
+        float obstacleDistance; // Leader[0] distance for perception delay, progressive braking, lane change
+        float obstacleSpeed;   // Leader[0] speed
+
+        Span<LeaderInfo> leaders = stackalloc LeaderInfo[3];
+        int leaderCount;
+
+        if (playerIsClosest)
         {
+            float pSpeed = playerObstacle.entryCar!.Status.Velocity.Length();
+            if (pSpeed < 0.1f) pSpeed = 0;
+            leaders[0] = new LeaderInfo(playerObstacle.distance, pSpeed, _leaderAcceleration, true);
+            leaderCount = 1;
             obstacleDistance = playerObstacle.distance;
-            obstacleSpeed = playerObstacle.entryCar.Status.Velocity.Length();
-            if (obstacleSpeed < 0.1f) obstacleSpeed = 0;
+            obstacleSpeed = pSpeed;
         }
-        else if (splineLookahead.ClosestAiState != null)
+        else if (splineLookahead.LeaderCount > 0)
         {
-            obstacleDistance = splineLookahead.ClosestAiStateDistance;
-            obstacleSpeed = Math.Min(splineLookahead.ClosestAiState.CurrentSpeed, splineLookahead.ClosestAiState.TargetSpeed);
+            // Use multi-anticipation with AI leaders
+            leaderCount = splineLookahead.LeaderCount;
+            leaders[0] = splineLookahead.Leader0;
+            if (leaderCount > 1) leaders[1] = splineLookahead.Leader1;
+            if (leaderCount > 2) leaders[2] = splineLookahead.Leader2;
+            obstacleDistance = splineLookahead.Leader0.Gap;
+            obstacleSpeed = splineLookahead.Leader0.Speed;
         }
         else
         {
+            leaderCount = 0;
             obstacleDistance = float.MaxValue;
             obstacleSpeed = 0;
         }
 
-        // Only use IDM car-following if there's actual collision risk:
-        // 1. Obstacle is close (within reasonable following distance), OR
-        // 2. We might catch up (going faster or similar speed), OR
-        // 3. Obstacle is very close
+        // Perception delay for cut-ins (Change 4) — applies to leader[0] only
+        float emergencyZoneStart = _minObstacleDistance * 3;
+        long currentTime = _sessionManager.ServerTimeMilliseconds;
+        if (obstacleDistance < float.MaxValue)
+        {
+            // Detect new obstacle (gap halved suddenly and reasonably close)
+            bool isNewObstacle = obstacleDistance < _perceivedObstacleDistance * 0.5f
+                                 && obstacleDistance < emergencyZoneStart * 2;
+
+            if (isNewObstacle && _obstaclePerceived)
+            {
+                _obstaclePerceived = false;
+                _newObstacleDetectedAt = currentTime;
+            }
+
+            if (!_obstaclePerceived)
+            {
+                if (currentTime - _newObstacleDetectedAt > _reactionTimeMs)
+                {
+                    _obstaclePerceived = true;
+                }
+                else
+                {
+                    if (obstacleDistance > _minObstacleDistance * 1.5f)
+                    {
+                        obstacleDistance = _perceivedObstacleDistance;
+                        obstacleSpeed = _perceivedObstacleSpeed;
+                    }
+                    else
+                    {
+                        _obstaclePerceived = true;
+                    }
+                }
+            }
+
+            if (_obstaclePerceived)
+            {
+                _perceivedObstacleDistance = obstacleDistance;
+                _perceivedObstacleSpeed = obstacleSpeed;
+            }
+
+            // Apply estimation noise (Change 5E) - Wiener process for leader[0]
+            float dt = 0.1f;
+            float correlationDecay = MathF.Exp(-dt / 10.0f);
+            float noiseScale = MathF.Sqrt(1 - correlationDecay * correlationDecay);
+            _gapNoiseState = correlationDecay * _gapNoiseState + noiseScale * RandomNormal();
+            _speedNoiseState = correlationDecay * _speedNoiseState + noiseScale * RandomNormal();
+
+            float gapNoise = 1.0f + _gapNoiseState * _configuration.GapEstimationError;
+            float speedNoise = 1.0f + _speedNoiseState * _configuration.SpeedEstimationError;
+            obstacleDistance = MathF.Max(obstacleDistance * gapNoise, 0.1f);
+            obstacleSpeed = MathF.Max(obstacleSpeed * speedNoise, 0);
+
+            // Update leader[0] with noisy values
+            leaders[0] = new LeaderInfo(obstacleDistance, obstacleSpeed, leaders[0].Acceleration, leaders[0].IsPlayer);
+
+            // Apply independent noise to leaders 1-2
+            for (int i = 1; i < leaderCount; i++)
+            {
+                float iGapNoise = 1.0f + RandomNormal() * _configuration.GapEstimationError;
+                float iSpeedNoise = 1.0f + RandomNormal() * _configuration.SpeedEstimationError;
+                leaders[i] = new LeaderInfo(
+                    MathF.Max(leaders[i].Gap * iGapNoise, 0.1f),
+                    MathF.Max(leaders[i].Speed * iSpeedNoise, 0),
+                    leaders[i].Acceleration,
+                    leaders[i].IsPlayer);
+            }
+        }
+        else
+        {
+            _perceivedObstacleDistance = float.MaxValue;
+            _perceivedObstacleSpeed = 0;
+            _obstaclePerceived = true;
+        }
+
+        // Only use IDM car-following if there's actual collision risk (based on leader[0])
         bool shouldFollowObstacle = obstacleDistance < float.MaxValue &&
             (obstacleDistance < _configuration.IdmBaseTimeHeadwaySeconds * CurrentSpeed * 3 ||
-             CurrentSpeed >= obstacleSpeed - 2.0f ||  // We're faster or similar speed
-             obstacleDistance < _minObstacleDistance * 3);  // Very close
+             CurrentSpeed >= obstacleSpeed - 2.0f ||
+             obstacleDistance < _minObstacleDistance * 3);
 
+        // Calculate IDM acceleration using multi-anticipation
+        float idmAcceleration;
         if (!shouldFollowObstacle)
         {
-            // No relevant obstacle - just accelerate toward desired speed (free-flow)
-            obstacleDistance = float.MaxValue;
-            obstacleSpeed = CurrentSpeed;  // Neutral - no closing
+            // No relevant obstacle - free-flow
+            idmAcceleration = IdmBrain.CalculateMultiAnticipativeAcceleration(
+                CurrentSpeed, _desiredSpeed,
+                leaders, 0,
+                in _personality, _configuration,
+                EntryCarAi.AiAcceleration, EntryCarAi.AiDeceleration);
         }
-
-        // Emergency stop for very close obstacles
-        if (obstacleDistance < _minObstacleDistance)
+        else
         {
-            Acceleration = -EntryCarAi.AiDeceleration * 2.0f;
-            TargetSpeed = 0;
-            HandleStoppedForObstacle();
-            return;
+            idmAcceleration = IdmBrain.CalculateMultiAnticipativeAcceleration(
+                CurrentSpeed, _desiredSpeed,
+                leaders, leaderCount,
+                in _personality, _configuration,
+                EntryCarAi.AiAcceleration, EntryCarAi.AiDeceleration);
         }
 
-        // Calculate IDM acceleration
-        float idmAcceleration = IdmBrain.CalculateAcceleration(
-            CurrentSpeed,
-            _desiredSpeed,
-            obstacleDistance,
-            obstacleSpeed,
-            in _personality,
-            _configuration,
-            EntryCarAi.AiAcceleration,
-            EntryCarAi.AiDeceleration);
+        // Drive-off delay: add realistic delay before accelerating from a stop
+        if (CurrentSpeed < 0.1f && _stoppedForObstacle && idmAcceleration > 0 && !_waitingToDriveOff)
+        {
+            // Obstacle just cleared while stopped — start delay timer
+            float delay = Random.Shared.NextSingle()
+                * (_configuration.DriveOffDelayMaxSeconds - _configuration.DriveOffDelayMinSeconds)
+                + _configuration.DriveOffDelayMinSeconds;
+            delay *= _personality.DriveOffDelayFactor;
+            _waitingToDriveOff = true;
+            _driveOffAt = currentTime + (long)(delay * 1000);
+            _driveOffRampTime = _configuration.DriveOffRampSeconds * _personality.DriveOffDelayFactor;
+            _driveOffElapsed = 0;
+        }
 
-        Acceleration = idmAcceleration;
-        TargetSpeed = idmAcceleration >= 0 ? _desiredSpeed : Math.Max(0, obstacleSpeed);
-        MaxSpeed = InitialMaxSpeed;
+        if (_waitingToDriveOff)
+        {
+            // Cancel if obstacle reappears (hard braking requested)
+            if (idmAcceleration < -0.5f)
+            {
+                _waitingToDriveOff = false;
+            }
+            else if (currentTime < _driveOffAt)
+            {
+                // Still in delay — keep stopped
+                idmAcceleration = 0;
+            }
+            else
+            {
+                // Ramp up with quadratic ease-in
+                _driveOffElapsed += 0.1f; // 100ms update interval
+                float rampFraction = Math.Clamp(_driveOffElapsed / _driveOffRampTime, 0, 1);
+                idmAcceleration *= rampFraction * rampFraction;
+                if (rampFraction >= 1.0f)
+                {
+                    _waitingToDriveOff = false;
+                }
+            }
+        }
 
-        // Consider lane change using overtake desire
+        // Progressive braking zone: blends IDM with emergency braking based on proximity
+        if (obstacleDistance < emergencyZoneStart)
+        {
+            // t = 1.0 at _minObstacleDistance, 0.0 at emergencyZoneStart
+            float t = 1.0f - Math.Clamp(
+                (obstacleDistance - _minObstacleDistance) / (emergencyZoneStart - _minObstacleDistance),
+                0f, 1f);
+
+            // Quadratic ease-in: gentle at first, hard near contact
+            float brakeFactor = t * t;
+
+            float emergencyBraking = -EntryCarAi.AiDeceleration * 2.0f;
+            Acceleration = idmAcceleration + (emergencyBraking - idmAcceleration) * brakeFactor;
+            TargetSpeed = obstacleDistance < _minObstacleDistance
+                ? 0
+                : Math.Max(0, obstacleSpeed * (1.0f - brakeFactor));
+            MaxSpeed = InitialMaxSpeed;
+
+            if (obstacleDistance < _minObstacleDistance)
+            {
+                HandleStoppedForObstacle();
+                return;
+            }
+        }
+        else
+        {
+            Acceleration = idmAcceleration;
+            TargetSpeed = idmAcceleration >= 0 ? _desiredSpeed : Math.Max(0, obstacleSpeed);
+            MaxSpeed = InitialMaxSpeed;
+        }
+
+        // Track leader acceleration for CAH model (leader[0] speed only)
+        _leaderAcceleration = UpdateLeaderAcceleration(obstacleSpeed);
+
+        // Consider lane change using overtake desire (leader[0] data only)
         if (!_laneChange.IsChangingLane)
         {
             ConsiderLaneChange(obstacleDistance, obstacleSpeed);
         }
 
         HandleStoppedForObstacle();
+    }
+
+    /// <summary>
+    /// Box-Muller transform for generating normally distributed random numbers.
+    /// </summary>
+    private static float RandomNormal()
+    {
+        float u1 = 1.0f - (float)Random.Shared.NextDouble(); // Uniform(0,1] to avoid log(0)
+        float u2 = (float)Random.Shared.NextDouble();
+        return MathF.Sqrt(-2.0f * MathF.Log(u1)) * MathF.Cos(2.0f * MathF.PI * u2);
+    }
+
+    private float UpdateLeaderAcceleration(float currentLeaderSpeed)
+    {
+        float dt = 0.1f; // obstacle detection runs at 100ms intervals
+        float accel = (currentLeaderSpeed - _lastLeaderSpeed) / dt;
+        _lastLeaderSpeed = currentLeaderSpeed;
+        return accel;
     }
 
     private void ConsiderLaneChange(float obstacleDistance, float obstacleSpeed)
@@ -1470,26 +1718,68 @@ public class AiState : IAiState, IDisposable
         long currentTime = _sessionManager.ServerTimeMilliseconds;
         long dt = currentTime - _lastTick;
         _lastTick = currentTime;
+        float dtSeconds = dt / 1000.0f;
 
-        if (Acceleration != 0)
+        // Jerk limiting (Change 6B): smooth acceleration transitions
+        const float maxJerk = 5.0f; // m/s^3
+        float maxAccelChange = maxJerk * dtSeconds;
+        Acceleration = Math.Clamp(Acceleration,
+            _previousAcceleration - maxAccelChange,
+            _previousAcceleration + maxAccelChange);
+        _previousAcceleration = Acceleration;
+
+        // Coasting behavior (Change 6A): light deceleration = engine braking only
+        const float coastingThreshold = -1.5f; // m/s^2
+        float effectiveAcceleration = Acceleration;
+        if (Acceleration > coastingThreshold && Acceleration < 0)
         {
-            CurrentSpeed += Acceleration * (dt / 1000.0f);
-
-            if ((Acceleration < 0 && CurrentSpeed < TargetSpeed) || (Acceleration > 0 && CurrentSpeed > TargetSpeed))
-            {
-                CurrentSpeed = TargetSpeed;
-                Acceleration = 0;
-            }
+            // Coast: limit deceleration to engine braking rate
+            effectiveAcceleration = Math.Max(Acceleration, coastingThreshold);
         }
 
-        // Clamp speed to never exceed desired max
-        CurrentSpeed = Math.Min(CurrentSpeed, MaxSpeed);
+        float moveMeters;
+        if (effectiveAcceleration < 0 && CurrentSpeed > 0)
+        {
+            // Ballistic stop (Change 5C): prevent negative velocity
+            float stoppingTime = -CurrentSpeed / effectiveAcceleration;
 
-        float moveMeters = (dt / 1000.0f) * CurrentSpeed;
+            if (stoppingTime < dtSeconds)
+            {
+                // Would stop within this frame - calculate exact partial distance
+                moveMeters = CurrentSpeed * stoppingTime + 0.5f * effectiveAcceleration * stoppingTime * stoppingTime;
+                CurrentSpeed = 0;
+                Acceleration = 0;
+                _previousAcceleration = 0;
+            }
+            else
+            {
+                CurrentSpeed += effectiveAcceleration * dtSeconds;
+                moveMeters = dtSeconds * CurrentSpeed;
+            }
+        }
+        else
+        {
+            if (effectiveAcceleration != 0)
+            {
+                CurrentSpeed += effectiveAcceleration * dtSeconds;
+
+                if ((effectiveAcceleration < 0 && CurrentSpeed < TargetSpeed) || (effectiveAcceleration > 0 && CurrentSpeed > TargetSpeed))
+                {
+                    CurrentSpeed = TargetSpeed;
+                    Acceleration = 0;
+                    _previousAcceleration = 0;
+                }
+            }
+            moveMeters = dtSeconds * CurrentSpeed;
+        }
+
+        // Clamp speed to never exceed desired max and never go negative
+        CurrentSpeed = Math.Clamp(CurrentSpeed, 0, MaxSpeed);
 
         Vector3 smoothPosition;
         Vector3 smoothTangent;
         float camber;
+        bool wasLaneChanging = _laneChange.IsChangingLane;
 
         if (_laneChange.IsChangingLane)
         {
@@ -1500,8 +1790,16 @@ public class AiState : IAiState, IDisposable
             // Use terrain-following blended height from both lane profiles
             float blendedY = _laneChange.GetBlendedHeight();
             smoothPosition = new Vector3(laneChangePoint.Position.X, blendedY, laneChangePoint.Position.Z);
-            smoothTangent = laneChangePoint.Tangent;
             camber = _laneChange.GetBlendedCamber();
+
+            // Correct tangent Y: replace CatmullRom curve Y derivative with blended height slope
+            // so that Status.Velocity matches actual position trajectory (fixes client-side drift)
+            float blendedSlope = _laneChange.GetBlendedPitchSlope();
+            var rawTangent = laneChangePoint.Tangent;
+            float horizLen = MathF.Sqrt(rawTangent.X * rawTangent.X + rawTangent.Z * rawTangent.Z);
+            smoothTangent = horizLen > 0.001f
+                ? Vector3.Normalize(new Vector3(rawTangent.X, blendedSlope * horizLen, rawTangent.Z))
+                : rawTangent;
 
             // Check if lane change is complete
             if (_laneChange.IsComplete)
@@ -1543,12 +1841,11 @@ public class AiState : IAiState, IDisposable
 
         // Pitch from spline tangent Y components for correct road slope angle
         float pitch;
-        if (_laneChange.IsChangingLane)
+        if (wasLaneChanging)
         {
-            // During lane change, derive pitch from blended slope of both lane profiles
-            float blendedSlope = _laneChange.GetBlendedPitchSlope();
+            // During lane change (including completion frame), derive pitch from corrected tangent
             float lcHorizLength = new Vector2(smoothTangent.X, smoothTangent.Z).Length();
-            pitch = MathF.Atan2(blendedSlope * lcHorizLength, lcHorizLength);
+            pitch = MathF.Atan2(smoothTangent.Y, lcHorizLength);
         }
         else if (_junctionEvaluator.TryNext(CurrentSplinePointId, out var pitchNextPoint))
         {
@@ -1605,7 +1902,7 @@ public class AiState : IAiState, IDisposable
         Status.EngineRpm = (ushort)MathUtils.Lerp(EntryCarAi.AiIdleEngineRpm, EntryCarAi.AiMaxEngineRpm, CurrentSpeed / _configuration.MaxSpeedMs);
         Status.StatusFlag = GetLights(_configuration.EnableDaytimeLights, _weatherManager.CurrentSunPosition, _randomTwilight)
                             | (_sessionManager.ServerTimeMilliseconds < _stoppedForCollisionUntil || CurrentSpeed < 20 / 3.6f ? CarStatusFlags.HazardsOn : 0)
-                            | (CurrentSpeed == 0 || Acceleration < 0 ? CarStatusFlags.BrakeLightsOn : 0)
+                            | (CurrentSpeed == 0 || Acceleration < -1.0f ? CarStatusFlags.BrakeLightsOn : 0)
                             | (_stoppedForObstacle && _sessionManager.ServerTimeMilliseconds > _obstacleHonkStart && _sessionManager.ServerTimeMilliseconds < _obstacleHonkEnd ? CarStatusFlags.Horn : 0)
                             | GetWiperSpeed(_weatherManager.CurrentWeather.RainIntensity)
                             | _indicator;
