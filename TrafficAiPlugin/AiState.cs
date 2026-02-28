@@ -714,13 +714,12 @@ public class AiState : IAiState, IDisposable
 
             float emergencyBraking = -EntryCarAi.AiDeceleration * 2.0f;
             Acceleration = idmAcceleration + (emergencyBraking - idmAcceleration) * brakeFactor;
-            TargetSpeed = obstacleDistance < _minObstacleDistance
-                ? 0
-                : Math.Max(0, obstacleSpeed * (1.0f - brakeFactor));
+            TargetSpeed = Math.Max(0, obstacleSpeed);
             MaxSpeed = InitialMaxSpeed;
 
             if (obstacleDistance < _minObstacleDistance)
             {
+                TargetSpeed = 0;
                 HandleStoppedForObstacle();
                 return;
             }
@@ -1485,50 +1484,22 @@ public class AiState : IAiState, IDisposable
         long currentTime = _sessionManager.ServerTimeMilliseconds;
         long dt = currentTime - _lastTick;
         _lastTick = currentTime;
-        float dtSeconds = dt / 1000.0f;
 
-        // Coasting: light deceleration = engine braking only (no visible brake application)
-        const float coastingThreshold = -1.5f; // m/s^2
-        float effectiveAcceleration = Acceleration;
-        if (Acceleration > coastingThreshold && Acceleration < 0)
+        if (Acceleration != 0)
         {
-            effectiveAcceleration = Math.Max(Acceleration, coastingThreshold);
-        }
+            CurrentSpeed += Acceleration * (dt / 1000.0f);
 
-        float moveMeters;
-        if (effectiveAcceleration < 0 && CurrentSpeed > 0)
-        {
-            // Ballistic stop: prevent negative velocity
-            float stoppingTime = -CurrentSpeed / effectiveAcceleration;
-            if (stoppingTime < dtSeconds)
+            if ((Acceleration < 0 && CurrentSpeed < TargetSpeed) || (Acceleration > 0 && CurrentSpeed > TargetSpeed))
             {
-                moveMeters = CurrentSpeed * stoppingTime + 0.5f * effectiveAcceleration * stoppingTime * stoppingTime;
-                CurrentSpeed = 0;
+                CurrentSpeed = TargetSpeed;
                 Acceleration = 0;
             }
-            else
-            {
-                CurrentSpeed += effectiveAcceleration * dtSeconds;
-                moveMeters = dtSeconds * CurrentSpeed;
-            }
-        }
-        else
-        {
-            if (effectiveAcceleration != 0)
-            {
-                CurrentSpeed += effectiveAcceleration * dtSeconds;
-
-                if ((effectiveAcceleration < 0 && CurrentSpeed < TargetSpeed) || (effectiveAcceleration > 0 && CurrentSpeed > TargetSpeed))
-                {
-                    CurrentSpeed = TargetSpeed;
-                    Acceleration = 0;
-                }
-            }
-            moveMeters = dtSeconds * CurrentSpeed;
         }
 
-        // Clamp speed to never exceed desired max and never go negative
-        CurrentSpeed = Math.Clamp(CurrentSpeed, 0, MaxSpeed);
+        // Clamp speed to never exceed desired max
+        CurrentSpeed = Math.Min(CurrentSpeed, MaxSpeed);
+
+        float moveMeters = (dt / 1000.0f) * CurrentSpeed;
 
         Vector3 smoothPosition;
         Vector3 smoothTangent;

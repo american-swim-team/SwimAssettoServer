@@ -465,7 +465,7 @@ public class AiBehavior : BackgroundService
 
     private void AdjustOverbooking()
     {
-        int playerCount = _entryCarManager.EntryCars.Count(car => car.Client != null && car.Client.IsConnected);
+        int playerCount = CalculateEffectivePlayerCount();
         var aiSlots = _entryCarManager.EntryCars.Where(car => car.Client == null && car.AiControlled).ToList(); // client null check is necessary here so that slots where someone is connecting don't count
 
         if (aiSlots.Count == 0)
@@ -487,6 +487,50 @@ public class AiBehavior : BackgroundService
             var entryCarAi = _trafficAi.GetAiCarBySessionId(aiSlots[i].SessionId);
             entryCarAi.SetAiOverbooking(i < rest ? overbooking + 1 : overbooking);
         }
+    }
+
+    private int CalculateEffectivePlayerCount()
+    {
+        var players = new List<AssettoServer.Server.EntryCar>();
+        foreach (var car in _entryCarManager.EntryCars)
+        {
+            if (car.Client is { IsConnected: true })
+                players.Add(car);
+        }
+
+        if (players.Count <= 1) return players.Count;
+
+        float groupDistSq = _configuration.PlayerRadiusSquared;
+        var visited = new bool[players.Count];
+        int groupCount = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (visited[i]) continue;
+            visited[i] = true;
+            groupCount++;
+
+            // BFS: transitively group all players within PlayerRadiusMeters
+            var queue = new Queue<int>();
+            queue.Enqueue(i);
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+                for (int j = 0; j < players.Count; j++)
+                {
+                    if (visited[j]) continue;
+                    if (Vector3.DistanceSquared(
+                            players[current].Status.Position,
+                            players[j].Status.Position) < groupDistSq)
+                    {
+                        visited[j] = true;
+                        queue.Enqueue(j);
+                    }
+                }
+            }
+        }
+
+        return groupCount;
     }
 
     private void SetHttpDetailsExtensions()
