@@ -103,29 +103,6 @@ public class AiSpline : IAiSpline, IDisposable
         _file.Dispose();
     }
     
-    public Vector3 GetForwardVector(int pointId)
+    public Vector3 GetForwardVector(int pointId) 
         => Operations.GetForwardVector(pointId);
-
-    /// <summary>
-    /// Convert a distance in meters to a spline point count by walking the spline forward from a given point.
-    /// </summary>
-    /// <param name="startPointId">The spline point to start walking from</param>
-    /// <param name="meters">Distance in meters to convert</param>
-    /// <returns>Number of spline points that cover the given distance</returns>
-    public int MetersToPoints(int startPointId, float meters)
-    {
-        var points = Points;
-        float accumulated = 0;
-        int count = 0;
-        int pointId = startPointId;
-
-        while (accumulated < meters && pointId >= 0 && pointId < points.Length)
-        {
-            accumulated += points[pointId].Length;
-            count++;
-            pointId = points[pointId].NextId;
-        }
-
-        return Math.Max(1, count);
-    }
 }

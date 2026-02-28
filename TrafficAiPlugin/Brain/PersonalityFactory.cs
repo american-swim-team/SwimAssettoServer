@@ -23,10 +23,6 @@ public class PersonalityFactory
     private const float MaxAccelerationFactor = 1.2f;
     private const float MinDecelerationFactor = 0.85f;
     private const float MaxDecelerationFactor = 1.15f;
-    private const float MinReactionTimeFactor = 0.7f;
-    private const float MaxReactionTimeFactor = 1.3f;
-    private const float MinDriveOffDelayFactor = 0.6f;
-    private const float MaxDriveOffDelayFactor = 1.4f;
 
     public PersonalityFactory(TrafficAiConfiguration config)
     {
@@ -88,19 +84,7 @@ public class PersonalityFactory
             DecelerationFactor = GenerateTraitFromTemperament(
                 temperament, traitVariance,
                 MinDecelerationFactor, MaxDecelerationFactor,
-                correlationDirection: 1),
-
-            // Aggressive drivers react faster (inverse - lower factor = faster reaction)
-            ReactionTimeFactor = GenerateTraitFromTemperament(
-                temperament, traitVariance,
-                MinReactionTimeFactor, MaxReactionTimeFactor,
-                correlationDirection: -1),
-
-            // Aggressive drivers drive off sooner (inverse - lower factor = quicker drive-off)
-            DriveOffDelayFactor = GenerateTraitFromTemperament(
-                temperament, traitVariance,
-                MinDriveOffDelayFactor, MaxDriveOffDelayFactor,
-                correlationDirection: -1)
+                correlationDirection: 1)
         };
     }
 

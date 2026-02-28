@@ -184,33 +184,6 @@ public class AiBehavior : BackgroundService
     private readonly List<Vector3> _playerOffsetPositions = new();
     private readonly List<KeyValuePair<AiState, float>> _aiMinDistanceToPlayer = new();
     private readonly List<KeyValuePair<AssettoServer.Server.EntryCar, float>> _playerMinDistanceToAi = new();
-    private readonly List<PlayerCluster> _playerClusters = new();
-
-    private struct PlayerCluster
-    {
-        public Vector3 Centroid;
-        public readonly List<EntryCar> Players;
-        public float RemainingBudget;
-
-        public PlayerCluster(EntryCar firstPlayer, float budget)
-        {
-            Players = [firstPlayer];
-            Centroid = firstPlayer.Status.Position;
-            RemainingBudget = budget;
-        }
-
-        public void AddPlayer(EntryCar player, float additionalBudget)
-        {
-            Players.Add(player);
-            // Recompute centroid as average of all player positions
-            var sum = Vector3.Zero;
-            for (int i = 0; i < Players.Count; i++)
-                sum += Players[i].Status.Position;
-            Centroid = sum / Players.Count;
-            RemainingBudget += additionalBudget;
-        }
-    }
-
     private void Update()
     {
         using var context = _updateDurationTimer.NewTimer();
@@ -221,7 +194,6 @@ public class AiBehavior : BackgroundService
         _playerOffsetPositions.Clear();
         _aiMinDistanceToPlayer.Clear();
         _playerMinDistanceToAi.Clear();
-        _playerClusters.Clear();
 
         foreach (var entryCar in _entryCarManager.EntryCars)
         {
@@ -241,6 +213,7 @@ public class AiBehavior : BackgroundService
                 entryCarAi.RemoveUnsafeStates();
                 entryCarAi.GetInitializedStates(_initializedAiStates, _uninitializedAiStates);
             }
+
         }
 
         _aiStateCountMetric.Set(_initializedAiStates.Count);
@@ -301,97 +274,43 @@ public class AiBehavior : BackgroundService
             }
         }
 
-        // Build player clusters for spawn distribution
-        float clusterRadiusSquared = _configuration.PlayerClusterRadiusMeters * _configuration.PlayerClusterRadiusMeters;
-        float baseBudget = _configuration.AiPerPlayerTargetCount;
-        float diminishing = _configuration.ClusterDiminishingFactor;
-
-        for (int i = 0; i < _playerCars.Count; i++)
+        if (_initializedAiStates.Count > 0 && _playerCars.Count > 0)
         {
-            var player = _playerCars[i];
-            bool addedToCluster = false;
-
-            for (int c = 0; c < _playerClusters.Count; c++)
+            _playerCars.Clear();
+            // Order player cars by their minimum distance to an AI. Higher distance = higher chance for next AI spawn
+            _playerMinDistanceToAi.Sort((a, b) => b.Value.CompareTo(a.Value));
+            for (int i = 0; i < _playerMinDistanceToAi.Count; i++)
             {
-                if (Vector3.DistanceSquared(player.Status.Position, _playerClusters[c].Centroid) < clusterRadiusSquared)
-                {
-                    var cluster = _playerClusters[c];
-                    cluster.AddPlayer(player, baseBudget * diminishing);
-                    _playerClusters[c] = cluster;
-                    addedToCluster = true;
-                    break;
-                }
-            }
-
-            if (!addedToCluster)
-            {
-                _playerClusters.Add(new PlayerCluster(player, baseBudget));
+                _playerCars.Add(_playerMinDistanceToAi[i].Key);
             }
         }
 
-        // Spawn loop using cluster budgets
-        int maxAttempts = _uninitializedAiStates.Count * 2;
-        int attempts = 0;
-        while (_uninitializedAiStates.Count > 0 && _playerClusters.Count > 0 && attempts < maxAttempts)
+        while (_playerCars.Count > 0 && _uninitializedAiStates.Count > 0)
         {
-            attempts++;
-
-            // Pick a cluster weighted by remaining budget
-            float totalBudget = 0;
-            for (int c = 0; c < _playerClusters.Count; c++)
-                totalBudget += _playerClusters[c].RemainingBudget;
-
-            if (totalBudget <= 0)
-                break;
-
-            float pick = (float)(Random.Shared.NextDouble() * totalBudget);
-            int clusterIdx = 0;
-            float cumulative = 0;
-            for (int c = 0; c < _playerClusters.Count; c++)
+            int spawnPointId = -1;
+            while (spawnPointId < 0 && _playerCars.Count > 0)
             {
-                cumulative += _playerClusters[c].RemainingBudget;
-                if (pick <= cumulative)
-                {
-                    clusterIdx = c;
-                    break;
-                }
+                var targetPlayerCar = _playerCars.ElementAt(GetRandomWeighted(_playerCars.Count));
+                _playerCars.Remove(targetPlayerCar);
+
+                spawnPointId = GetSpawnPoint(targetPlayerCar);
             }
 
-            var selectedCluster = _playerClusters[clusterIdx];
-
-            // Pick a random player from the cluster to use as spawn anchor
-            var anchorPlayer = selectedCluster.Players[Random.Shared.Next(selectedCluster.Players.Count)];
-
-            int spawnPointId = GetSpawnPoint(anchorPlayer);
             if (spawnPointId < 0 || !_junctionEvaluator.TryNext(spawnPointId, out _))
                 continue;
 
             var previousAi = FindClosestAiState(spawnPointId, false);
             var nextAi = FindClosestAiState(spawnPointId, true);
 
-            bool spawned = false;
             foreach (var targetAiState in _uninitializedAiStates)
             {
                 if (!targetAiState.CanSpawn(spawnPointId, previousAi, nextAi))
                     continue;
 
                 targetAiState.Teleport(spawnPointId);
+
                 _uninitializedAiStates.Remove(targetAiState);
-                spawned = true;
                 break;
-            }
-
-            if (spawned)
-            {
-                // Decrement cluster budget
-                selectedCluster.RemainingBudget -= 1.0f;
-                _playerClusters[clusterIdx] = selectedCluster;
-
-                // Remove exhausted clusters
-                if (selectedCluster.RemainingBudget <= 0)
-                {
-                    _playerClusters.RemoveAt(clusterIdx);
-                }
             }
         }
     }
@@ -518,24 +437,7 @@ public class AiBehavior : BackgroundService
             return -1;
         }
 
-        int minSpawnPoints, maxSpawnPoints;
-#pragma warning disable CS0618 // Backward compat: check if legacy point-based params are set
-        if (_configuration.MinSpawnDistanceMeters > 0 && _configuration.MaxSpawnDistanceMeters > 0
-            && _configuration.MinSpawnDistancePoints == 0 && _configuration.MaxSpawnDistancePoints == 0)
-#pragma warning restore CS0618
-        {
-            // New meter-based config: convert to points dynamically from player position
-            minSpawnPoints = _spline.MetersToPoints(result.PointId, _configuration.MinSpawnDistanceMeters);
-            maxSpawnPoints = _spline.MetersToPoints(result.PointId, _configuration.MaxSpawnDistanceMeters);
-        }
-        else
-        {
-            minSpawnPoints = _configuration.EffectiveMinSpawnDistancePoints;
-            maxSpawnPoints = _configuration.EffectiveMaxSpawnDistancePoints;
-        }
-
-        if (maxSpawnPoints <= minSpawnPoints) maxSpawnPoints = minSpawnPoints + 1;
-        int spawnDistance = Random.Shared.Next(minSpawnPoints, maxSpawnPoints);
+        int spawnDistance = Random.Shared.Next(_configuration.MinSpawnDistancePoints, _configuration.MaxSpawnDistancePoints);
         var spawnPointId = _junctionEvaluator.Traverse(result.PointId, spawnDistance * direction);
 
         if (spawnPointId >= 0)
