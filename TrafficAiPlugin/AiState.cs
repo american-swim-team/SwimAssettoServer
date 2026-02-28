@@ -693,16 +693,6 @@ public class AiState : IAiState, IDisposable
             obstacleSpeed = CurrentSpeed;  // Neutral - no closing
         }
 
-        // Emergency stop for very close obstacles
-        if (obstacleDistance < _minObstacleDistance)
-        {
-            Acceleration = -EntryCarAi.AiDeceleration * 2.0f;
-            TargetSpeed = 0;
-            HandleStoppedForObstacle();
-            return;
-        }
-
-        // Calculate IDM acceleration
         float idmAcceleration = IdmBrain.CalculateAcceleration(
             CurrentSpeed,
             _desiredSpeed,
@@ -713,9 +703,34 @@ public class AiState : IAiState, IDisposable
             EntryCarAi.AiAcceleration,
             EntryCarAi.AiDeceleration);
 
-        Acceleration = idmAcceleration;
-        TargetSpeed = idmAcceleration >= 0 ? _desiredSpeed : Math.Max(0, obstacleSpeed);
-        MaxSpeed = InitialMaxSpeed;
+        // Progressive braking zone: blends IDM with emergency braking based on proximity
+        float emergencyZoneStart = _minObstacleDistance * 3;
+        if (obstacleDistance < emergencyZoneStart)
+        {
+            float t = 1.0f - Math.Clamp(
+                (obstacleDistance - _minObstacleDistance) / (emergencyZoneStart - _minObstacleDistance),
+                0f, 1f);
+            float brakeFactor = t * t; // quadratic ease-in
+
+            float emergencyBraking = -EntryCarAi.AiDeceleration * 2.0f;
+            Acceleration = idmAcceleration + (emergencyBraking - idmAcceleration) * brakeFactor;
+            TargetSpeed = obstacleDistance < _minObstacleDistance
+                ? 0
+                : Math.Max(0, obstacleSpeed * (1.0f - brakeFactor));
+            MaxSpeed = InitialMaxSpeed;
+
+            if (obstacleDistance < _minObstacleDistance)
+            {
+                HandleStoppedForObstacle();
+                return;
+            }
+        }
+        else
+        {
+            Acceleration = idmAcceleration;
+            TargetSpeed = idmAcceleration >= 0 ? _desiredSpeed : Math.Max(0, obstacleSpeed);
+            MaxSpeed = InitialMaxSpeed;
+        }
 
         // Consider lane change using overtake desire
         if (!_laneChange.IsChangingLane)
@@ -1470,22 +1485,50 @@ public class AiState : IAiState, IDisposable
         long currentTime = _sessionManager.ServerTimeMilliseconds;
         long dt = currentTime - _lastTick;
         _lastTick = currentTime;
+        float dtSeconds = dt / 1000.0f;
 
-        if (Acceleration != 0)
+        // Coasting: light deceleration = engine braking only (no visible brake application)
+        const float coastingThreshold = -1.5f; // m/s^2
+        float effectiveAcceleration = Acceleration;
+        if (Acceleration > coastingThreshold && Acceleration < 0)
         {
-            CurrentSpeed += Acceleration * (dt / 1000.0f);
-
-            if ((Acceleration < 0 && CurrentSpeed < TargetSpeed) || (Acceleration > 0 && CurrentSpeed > TargetSpeed))
-            {
-                CurrentSpeed = TargetSpeed;
-                Acceleration = 0;
-            }
+            effectiveAcceleration = Math.Max(Acceleration, coastingThreshold);
         }
 
-        // Clamp speed to never exceed desired max
-        CurrentSpeed = Math.Min(CurrentSpeed, MaxSpeed);
+        float moveMeters;
+        if (effectiveAcceleration < 0 && CurrentSpeed > 0)
+        {
+            // Ballistic stop: prevent negative velocity
+            float stoppingTime = -CurrentSpeed / effectiveAcceleration;
+            if (stoppingTime < dtSeconds)
+            {
+                moveMeters = CurrentSpeed * stoppingTime + 0.5f * effectiveAcceleration * stoppingTime * stoppingTime;
+                CurrentSpeed = 0;
+                Acceleration = 0;
+            }
+            else
+            {
+                CurrentSpeed += effectiveAcceleration * dtSeconds;
+                moveMeters = dtSeconds * CurrentSpeed;
+            }
+        }
+        else
+        {
+            if (effectiveAcceleration != 0)
+            {
+                CurrentSpeed += effectiveAcceleration * dtSeconds;
 
-        float moveMeters = (dt / 1000.0f) * CurrentSpeed;
+                if ((effectiveAcceleration < 0 && CurrentSpeed < TargetSpeed) || (effectiveAcceleration > 0 && CurrentSpeed > TargetSpeed))
+                {
+                    CurrentSpeed = TargetSpeed;
+                    Acceleration = 0;
+                }
+            }
+            moveMeters = dtSeconds * CurrentSpeed;
+        }
+
+        // Clamp speed to never exceed desired max and never go negative
+        CurrentSpeed = Math.Clamp(CurrentSpeed, 0, MaxSpeed);
 
         Vector3 smoothPosition;
         Vector3 smoothTangent;
@@ -1613,7 +1656,7 @@ public class AiState : IAiState, IDisposable
         Status.EngineRpm = (ushort)MathUtils.Lerp(EntryCarAi.AiIdleEngineRpm, EntryCarAi.AiMaxEngineRpm, CurrentSpeed / _configuration.MaxSpeedMs);
         Status.StatusFlag = GetLights(_configuration.EnableDaytimeLights, _weatherManager.CurrentSunPosition, _randomTwilight)
                             | (_sessionManager.ServerTimeMilliseconds < _stoppedForCollisionUntil || CurrentSpeed < 20 / 3.6f ? CarStatusFlags.HazardsOn : 0)
-                            | (CurrentSpeed == 0 || Acceleration < 0 ? CarStatusFlags.BrakeLightsOn : 0)
+                            | (CurrentSpeed == 0 || Acceleration < -1.0f ? CarStatusFlags.BrakeLightsOn : 0)
                             | (_stoppedForObstacle && _sessionManager.ServerTimeMilliseconds > _obstacleHonkStart && _sessionManager.ServerTimeMilliseconds < _obstacleHonkEnd ? CarStatusFlags.Horn : 0)
                             | GetWiperSpeed(_weatherManager.CurrentWeather.RainIntensity)
                             | _indicator;
